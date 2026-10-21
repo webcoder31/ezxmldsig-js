@@ -1,0 +1,28 @@
+# Publishes the package on npm when a release is published on GitHub, with
+# provenance: npm links the package to this workflow and to the commit it
+# was built from. The tests run first. Requires the secret NPM_TOKEN (an
+# npm automation token of the account webcoder31), and a public repository.
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

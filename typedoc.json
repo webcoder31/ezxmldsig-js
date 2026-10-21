@@ -1,0 +1,35 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/index.ts"
+  ],
+  "tsconfig": "tsconfig.build.json",
+  "out": "docs",
+  "name": "ezxmldsig for Node.js",
+  "readme": "README.md",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "githubPages": true,
+  "disableSources": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/webcoder31/ezxmldsig-js",
+    "npm": "https://www.npmjs.com/package/@webcoder31/ezxmldsig"
+  },
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": true
+  },
+  "highlightLanguages": [
+    "bash",
+    "sh",
+    "javascript",
+    "js",
+    "typescript",
+    "ts",
+    "json",
+    "xml",
+    "ini"
+  ]
+}

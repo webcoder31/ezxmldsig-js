@@ -40,23 +40,138 @@ import { describeSource, readPem, type PemSource } from './material.js';
 export const MAX_EXPIRY_TIME = 253402300799;
 
 /**
- * The options of the four factories (see the README for each of them).
+ * The options of the four factories.
+ *
+ * Each option applies to a context: token creation (`createXMLToken()`,
+ * `createSecureXMLToken()`), token analysis (`analyzeXMLToken()`,
+ * `analyzeSecureXMLToken()`), or both. The encryption options only apply
+ * when an encryption certificate (creation) or a decryption key (analysis)
+ * is given. An unknown option, an option given out of its context, or an
+ * option whose value is null, undefined or invalid throws: none is ignored.
+ *
+ * The algorithm options apply to both contexts: at creation, they are the
+ * algorithms the token is built with; at analysis, the algorithms the token
+ * must have been built with. A token built with other algorithms is
+ * rejected (`getError()` names them), unless `checkSigningAlgorithms` or
+ * `checkCryptingAlgorithms` is false. Their values are the URIs of the
+ * XMLDSIG and XML Encryption specifications, given by the constants of
+ * `XMLDSigToken` (e.g. `XMLDSigToken.RSA_SHA512`).
  */
 export interface TokenOptions {
+  /**
+   * Creation. Whether to encode the values of the data in base64 (marked
+   * `Algorithm="base64"`). Default: true.
+   */
   base64Encode?: boolean;
+
+  /**
+   * Creation. The namespace prefix of the elements of the signature; the
+   * empty string for none. Default: `'ds'`.
+   */
   xmldsigNsPrefix?: string;
+
+  /**
+   * Creation. The audience, or the list of audiences, the token is
+   * addressed to: names of the receivers (an application name, a URL...),
+   * agreed between the issuer and each receiver. Each one is a non-empty
+   * string, without surrounding spaces nor control characters. They are
+   * written in the token, covered by the signature (see `getAudience()`).
+   * Default: none.
+   */
   audience?: string | string[];
+
+  /**
+   * Creation. The number of seconds after which the token is out of date,
+   * whatever the time to live the receiver gives to `isOutOfDate()`. The
+   * expiry date is written in the token, covered by the signature (see
+   * `getExpiry()`). Default: none (only the receiver sets the time to live).
+   */
   validity?: number;
+
+  /**
+   * Analysis. The audience of this receiver, which the token must be
+   * addressed to: `isSignatureValid()` returns false if the token names no
+   * audience or does not name this one. A token that names audiences is
+   * rejected when this option is not given. Compared as is, character case
+   * included. Default: none.
+   */
   expectedAudience?: string;
+
+  /**
+   * Creation and analysis. The canonicalization of `ds:SignedInfo`, and the
+   * transform of the reference: `C14N` (default), `C14N_COMMENTS`,
+   * `EXC_C14N` or `EXC_C14N_COMMENTS`.
+   */
   canonicalizationAlgorithm?: string;
+
+  /**
+   * Creation and analysis. The signature algorithm: `RSA_SHA1`,
+   * `RSA_SHA256` (default), `RSA_SHA384` or `RSA_SHA512`. A key transport
+   * algorithm is refused.
+   */
   signatureAlgorithm?: string;
+
+  /**
+   * Creation and analysis. The digest algorithm: `SHA1`, `SHA256`
+   * (default), `SHA384`, `SHA512` or `RIPEMD160`.
+   */
   digestAlgorithm?: string;
+
+  /**
+   * Analysis. Whether to check that the signature, digest and
+   * canonicalization algorithms of the token are the expected ones. Even
+   * when false, an algorithm out of the lists is rejected. Default: true.
+   */
   checkSigningAlgorithms?: boolean;
+
+  /**
+   * Analysis. The trusted CA certificates: a PEM file or content, or a list
+   * of them, each of which may hold several certificates. The chain of the
+   * signing certificate must be verified up to a self-signed certificate of
+   * them: give the issuing CA and the certificates up to its root. Default:
+   * none. See the README, "Trust anchor".
+   */
   caCertPath?: PemSource | PemSource[];
+
+  /**
+   * Analysis. The certificate the token must be signed with (pinning), as a
+   * PEM file or content. Given alone, it is the trust anchor; given with
+   * `caCertPath`, both are required. Default: none.
+   */
   signerCertPath?: PemSource;
+
+  /**
+   * Analysis. The subject the signing certificate must have: an object of
+   * the fields to check, as `getCertSubject()` gives them (`{ O: 'Lothbrok
+   * Ltd', OU: 'Signature Dept' }`), or the full Distinguished Name, as
+   * `getCertDN()` gives it. Character case is significant. It does not
+   * replace a trust anchor. Default: none.
+   */
   expectedSubject?: string | Record<string, string | string[]>;
+
+  /**
+   * Encryption (creation with an encryption certificate, analysis with a
+   * decryption key). The symmetric algorithm of the data: `AES128_GCM`,
+   * `AES192_GCM`, `AES256_GCM` (default), or the algorithms without
+   * integrity `TRIPLEDES_CBC`, `AES128_CBC`, `AES192_CBC`, `AES256_CBC`,
+   * which an analysis only decrypts when this option names them, even when
+   * `checkCryptingAlgorithms` is false.
+   */
   sessionKeyCipheringAlgorithm?: string;
+
+  /**
+   * Encryption (creation with an encryption certificate, analysis with a
+   * decryption key). The key transport algorithm: `RSA_OAEP_MGF1P`
+   * (default, and only one). RSA 1.5 is refused.
+   */
   cryptAlgorithm?: string;
+
+  /**
+   * Analysis with a decryption key. Whether to check that the encryption
+   * algorithms of the token are the expected ones. Even when false, an
+   * algorithm out of the lists, or an undeclared CBC algorithm, is
+   * rejected. Default: true.
+   */
   checkCryptingAlgorithms?: boolean;
 }
 

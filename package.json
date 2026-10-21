@@ -1,6 +1,6 @@
 {
   "name": "@webcoder31/ezxmldsig",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Signed and encrypted XML tokens (XML Digital Signature, XML Encryption) for Node.js, interoperable with the PHP library ezxmldsig",
   "license": "CECILL-C",
   "author": "Thierry Thiers <webcoder31@gmail.com>",
@@ -27,7 +27,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md",
+    "SECURITY.md"
   ],
   "engines": {
     "node": ">=22.12"
@@ -35,7 +37,9 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "npm run build && npm run typecheck && node --test 'test/**/*.test.ts'",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "docs": "typedoc --treatWarningsAsErrors",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@xmldom/xmldom": "0.9.12",
@@ -44,7 +48,11 @@
   },
   "devDependencies": {
     "@types/node": "24.19.2",
-    "typescript": "7.0.2",
+    "typedoc": "0.28.20",
+    "typescript": "6.0.3",
     "xml-encryption": "6.0.2"
+  },
+  "bugs": {
+    "url": "https://github.com/webcoder31/ezxmldsig-js/issues"
   }
 }

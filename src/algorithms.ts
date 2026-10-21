@@ -34,24 +34,33 @@ export const EXC_C14N_COMMENTS = 'http://www.w3.org/2001/10/xml-exc-c14n#WithCom
 
 /* Digest. */
 
+/** SHA-1. */
 export const SHA1 = 'http://www.w3.org/2000/09/xmldsig#sha1';
 /** SHA-256 (default). */
 export const SHA256 = 'http://www.w3.org/2001/04/xmlenc#sha256';
+/** SHA-384. */
 export const SHA384 = 'http://www.w3.org/2001/04/xmldsig-more#sha384';
+/** SHA-512. */
 export const SHA512 = 'http://www.w3.org/2001/04/xmlenc#sha512';
+/** RIPEMD-160. */
 export const RIPEMD160 = 'http://www.w3.org/2001/04/xmlenc#ripemd160';
 
 /* Signature. */
 
+/** RSA-SHA1. */
 export const RSA_SHA1 = 'http://www.w3.org/2000/09/xmldsig#rsa-sha1';
 /** RSA-SHA256 (default). */
 export const RSA_SHA256 = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+/** RSA-SHA384. */
 export const RSA_SHA384 = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384';
+/** RSA-SHA512. */
 export const RSA_SHA512 = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512';
 
 /* Symmetric encryption of the token (session key). */
 
+/** AES-128-GCM. */
 export const AES128_GCM = 'http://www.w3.org/2009/xmlenc11#aes128-gcm';
+/** AES-192-GCM. */
 export const AES192_GCM = 'http://www.w3.org/2009/xmlenc11#aes192-gcm';
 /** AES-256-GCM (default). */
 export const AES256_GCM = 'http://www.w3.org/2009/xmlenc11#aes256-gcm';

@@ -169,26 +169,47 @@ export class XMLDSigToken {
   whose timestamp is in the future. */
   static readonly DESYNC_TOLERANCE = 30;
 
+  /** Inclusive canonicalization (default). */
   static readonly C14N = alg.C14N;
+  /** Inclusive canonicalization, with comments. */
   static readonly C14N_COMMENTS = alg.C14N_COMMENTS;
+  /** Exclusive canonicalization. */
   static readonly EXC_C14N = alg.EXC_C14N;
+  /** Exclusive canonicalization, with comments. */
   static readonly EXC_C14N_COMMENTS = alg.EXC_C14N_COMMENTS;
+  /** SHA-1. */
   static readonly SHA1 = alg.SHA1;
+  /** SHA-256 (default). */
   static readonly SHA256 = alg.SHA256;
+  /** SHA-384. */
   static readonly SHA384 = alg.SHA384;
+  /** SHA-512. */
   static readonly SHA512 = alg.SHA512;
+  /** RIPEMD-160. */
   static readonly RIPEMD160 = alg.RIPEMD160;
+  /** Triple DES CBC, without integrity. */
   static readonly TRIPLEDES_CBC = alg.TRIPLEDES_CBC;
+  /** AES-128-CBC, without integrity. */
   static readonly AES128_CBC = alg.AES128_CBC;
+  /** AES-192-CBC, without integrity. */
   static readonly AES192_CBC = alg.AES192_CBC;
+  /** AES-256-CBC, without integrity. */
   static readonly AES256_CBC = alg.AES256_CBC;
+  /** AES-128-GCM. */
   static readonly AES128_GCM = alg.AES128_GCM;
+  /** AES-192-GCM. */
   static readonly AES192_GCM = alg.AES192_GCM;
+  /** AES-256-GCM (default). */
   static readonly AES256_GCM = alg.AES256_GCM;
+  /** RSA-OAEP with MGF1-SHA1 (default key transport). */
   static readonly RSA_OAEP_MGF1P = alg.RSA_OAEP_MGF1P;
+  /** RSA-SHA1. */
   static readonly RSA_SHA1 = alg.RSA_SHA1;
+  /** RSA-SHA256 (default). */
   static readonly RSA_SHA256 = alg.RSA_SHA256;
+  /** RSA-SHA384. */
   static readonly RSA_SHA384 = alg.RSA_SHA384;
+  /** RSA-SHA512. */
   static readonly RSA_SHA512 = alg.RSA_SHA512;
 
   #xmldsigNsPrefix: string = XMLDSigToken.XMLDSIG_NS_PREFIX;

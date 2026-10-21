@@ -1,0 +1,42 @@
+# Tests under the supported versions of Node.js, with the tests of the
+# interoperability with the PHP library (in Docker, which the runners
+# have: CI=true makes them fail instead of being skipped), and a check that
+# the documentation of docs/ is up to date.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run docs
+      - name: The documentation of docs/ is up to date
+        run: git diff --exit-code -- docs || (echo 'Run npm run docs and commit docs/.' >&2; exit 1)
