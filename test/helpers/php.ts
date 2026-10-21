@@ -29,10 +29,19 @@ export const phpSkip: string | false = (() => {
   return docker.status === 0 ? false : 'Docker is not reachable: the PHP library cannot run.';
 })();
 
-/** Runs the requests in one container, and returns one result per request. */
-export function runPhp(requests: PhpRequest[]): PhpResult[] {
+/** The PHP versions the interoperability is checked with: those the PHP
+library supports, its oldest and its latest tested one. */
+export const PHP_VERSIONS = ['7.4', '8.3'] as const;
+
+/**
+ * Runs the requests in one container, and returns one result per request.
+ *
+ * @param version The PHP version (default: 8.3, see bin/php-ezxmldsig).
+ */
+export function runPhp(requests: PhpRequest[], version?: string): PhpResult[] {
   const run = spawnSync(SCRIPT, {
     cwd: ROOT_DIR,
+    env: version === undefined ? process.env : { ...process.env, PHP_VERSION: version },
     input: JSON.stringify(requests),
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
