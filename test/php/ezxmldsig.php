@@ -36,6 +36,16 @@
  *   the certificate, and the given plaintext). Result: {"xml": the altered
  *   token}.
  *
+ * - "attack": runs the attack "id" of the attack lab of the PHP library
+ *   demo, with the receiver of the demo in its default configuration, from
+ *   a token its issuer creates. Result: {"base": the legitimate token,
+ *   "forged": the altered one, "baseVerdict" and "verdict": the results of
+ *   the receiver (accepted, signatureValid, error, anomalies, and the status
+ *   of each step by id), "receiver": its analysis options, decryption key
+ *   and password, and time to live}.
+ *
+ * - "attacks": the identifiers of the attacks of the attack lab (no field).
+ *
  * - "constants": the constants of XMLDSigToken (no field). Result: an
  *   object of their names and values.
  *
@@ -48,11 +58,14 @@
  */
 
 require '/ezxmldsig/vendor/autoload.php';
-require '/ezxmldsig/demo/src/Forge.php';
+require '/ezxmldsig/demo/src/autoload.php';
 
 use RobRichards\XMLSecLibs\XMLSecEnc;
 use RobRichards\XMLSecLibs\XMLSecurityKey;
+use webcoder31\ezxmldsig\Demo\AttackLab;
+use webcoder31\ezxmldsig\Demo\Certs;
 use webcoder31\ezxmldsig\Demo\Forge;
+use webcoder31\ezxmldsig\Demo\Receiver;
 use webcoder31\ezxmldsig\X509Cert;
 use webcoder31\ezxmldsig\XMLDSigToken;
 
@@ -67,6 +80,26 @@ function jsonData($data)
         return array_map('jsonData', $data);
     }
     return is_string($data) && !mb_check_encoding($data, 'UTF-8') ? ['bytes' => base64_encode($data)] : $data;
+}
+
+/**
+ * Returns what the demo receiver concluded about a token.
+ */
+function verdict(array $verdict)
+{
+    $steps = [];
+    foreach ($verdict['steps'] as $step)
+    {
+        $steps[$step['id']] = $step['status'];
+    }
+    return [
+        'accepted'       => $verdict['accepted'],
+        'signatureValid' => $verdict['signatureValid'],
+        'error'          => $verdict['error'],
+        'anomalies'      => $verdict['anomalies'],
+        'steps'          => $steps,
+        'data'           => jsonData($verdict['data']),
+    ];
 }
 
 /**
@@ -199,6 +232,27 @@ function run(array $request)
                 }
             }
             return ['xml' => $forge->xml()];
+
+        case 'attack':
+            $receiver = Receiver::fromArray([]);
+            $result = (new AttackLab($receiver))->run($request['id']);
+            return [
+                'base'        => $result['base']['xml'],
+                'forged'      => $result['forged'],
+                'baseVerdict' => verdict($result['base']['verdict']),
+                'verdict'     => verdict($result['verdict']),
+                'receiver'    => [
+                    'options'          => $receiver->options(),
+                    'cryptKey'         => Certs::path('crypt.key.pem'),
+                    'cryptKeyPassword' => Certs::CRYPT_KEY_PASSWORD,
+                    'ttl'              => $receiver->config()['ttl'],
+                ],
+            ];
+
+        case 'attacks':
+            return array_map(function ($attack) {
+                return $attack['id'];
+            }, AttackLab::catalog());
 
         case 'constants':
             return (new ReflectionClass(XMLDSigToken::class))->getConstants();
