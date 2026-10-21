@@ -9,3 +9,5 @@
  */
 
 export * from './algorithms.js';
+export { X509Cert, type NameFields } from './x509.js';
+export type { PemSource } from './material.js';

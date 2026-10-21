@@ -15,7 +15,7 @@ const ROOT_DIR = fileURLToPath(new URL('../..', import.meta.url));
 const SCRIPT = fileURLToPath(new URL('../../bin/php-ezxmldsig', import.meta.url));
 
 export type PhpRequest = Record<string, unknown> & {
-  command: 'create' | 'analyze' | 'constants';
+  command: 'create' | 'analyze' | 'cert' | 'constants';
 };
 
 export type PhpResult = Record<string, unknown>;
@@ -38,7 +38,7 @@ export function runPhp(requests: PhpRequest[]): PhpResult[] {
     maxBuffer: 64 * 1024 * 1024,
   });
   if (run.status !== 0) {
-    throw new Error(`bin/php-ezxmldsig failed (status ${run.status}): ${run.stderr}`);
+    throw new Error(`bin/php-ezxmldsig failed (status ${run.status}): ${run.stderr}${run.stdout}`);
   }
   const results: unknown = JSON.parse(run.stdout);
   if (!Array.isArray(results) || results.length !== requests.length) {

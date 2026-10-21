@@ -16,17 +16,24 @@
  *   "cryptKey", "cryptKeyPassword", "options", and "ttl" for isOutOfDate()
  *   (default: 60).
  *
+ * - "cert": reads the certificate "cert" (a path) with X509Cert. Fields:
+ *   "trustedBy", a list of lists of CA certificate paths, and "validCA", a
+ *   list of CA certificate paths. Result: what X509Cert returns, with
+ *   isTrustedBy() for each list of "trustedBy" and isValidCA() for each
+ *   certificate of "validCA", in the same order.
+ *
  * - "constants": the constants of XMLDSigToken (no field). Result: an
  *   object of their names and values.
  *
  * The algorithm options are given by their URIs, the values of the
  * constants of XMLDSigToken. The result of an analysis holds what the
- * accessors of the token return; an exception thrown by the library gives
- * {"exception": message} instead.
+ * accessors of the token return; an exception or an error thrown by the
+ * library gives {"exception": message, "class": its class} instead.
  */
 
 require '/ezxmldsig/vendor/autoload.php';
 
+use webcoder31\ezxmldsig\X509Cert;
 use webcoder31\ezxmldsig\XMLDSigToken;
 
 /**
@@ -97,6 +104,26 @@ function run(array $request)
                 : XMLDSigToken::analyzeXMLToken($request['xml'], $options);
             return describe($token, $ttl);
 
+        case 'cert':
+            $cert = new X509Cert(file_get_contents($request['cert']));
+            return [
+                'fingerprint' => $cert->getFingerprint(),
+                'subject'     => $cert->getSubject(),
+                'issuer'      => $cert->getIssuer(),
+                'dn'          => $cert->getDN(),
+                'validFrom'   => $cert->getValidFrom(XMLDSigToken::TOKEN_TIMESTAMP_FORMAT),
+                'validTo'     => $cert->getValidTo(XMLDSigToken::TOKEN_TIMESTAMP_FORMAT),
+                'isOutOfDate' => $cert->isOutOfDate(),
+                'canSign'     => $cert->canSign(),
+                'der'         => base64_encode(X509Cert::pemToDer(file_get_contents($request['cert']))),
+                'trustedBy'   => array_map(function ($paths) use ($cert) {
+                    return $cert->isTrustedBy($paths);
+                }, $request['trustedBy'] ?? []),
+                'validCA'     => array_map(function ($path) use ($cert) {
+                    return $cert->isValidCA(file_get_contents($path));
+                }, $request['validCA'] ?? []),
+            ];
+
         case 'constants':
             return (new ReflectionClass(XMLDSigToken::class))->getConstants();
 
@@ -119,9 +146,9 @@ foreach ($requests as $request)
     {
         $results[] = run($request);
     }
-    catch (Exception $e)
+    catch (Throwable $e)
     {
-        $results[] = ['exception' => $e->getMessage()];
+        $results[] = ['exception' => $e->getMessage(), 'class' => get_class($e)];
     }
 }
 

@@ -1,0 +1,286 @@
+#!/bin/sh
+#
+# Generates the certificates of test/fixtures/trust/, which the tests of the
+# trust in a signing certificate use, in Docker.
+#
+# Usage:
+#   bin/gen-test-certs
+#
+# The certificates of test/fixtures/certs/ (root CA, intermediate CA,
+# signing and encryption certificates) come from the PHP library ezxmldsig,
+# which shares them. The ones generated here are issued by them, or by their
+# own key, each for one case of the trust in a certificate: see the README of
+# test/fixtures/trust/, which lists them. The tests compare what this library
+# reads from them, and decides about them, with what the PHP library (that is
+# OpenSSL) does.
+#
+# The script always runs itself again inside an Alpine Docker container
+# (alpine:3.22), whatever openssl the host has: the certificates then come
+# from the same OpenSSL version on every machine. The container runs as root,
+# to install openssl, and gives the written files back to the calling user.
+# Unless given otherwise, the certificates are valid for 10 years.
+
+set -eu
+
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+case "${1:-}" in
+    -h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+if [ "${GEN_CERTS_IN_DOCKER:-}" != 1 ]; then
+    if ! docker info >/dev/null 2>&1; then
+        echo "Docker is not reachable (with Colima: colima start)." >&2
+        exit 1
+    fi
+    echo "Running in Docker (alpine:3.22)." >&2
+    exec docker run --rm -e GEN_CERTS_IN_DOCKER=1 \
+        -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+        -v "$ROOT_DIR:/work" -w /work \
+        --entrypoint sh alpine:3.22 -c \
+        'apk add --no-cache -q openssl >/dev/null && sh bin/gen-test-certs "$@"' \
+        sh "$@"
+fi
+
+CERTS="$ROOT_DIR/test/fixtures/certs"
+OUT_DIR="$ROOT_DIR/test/fixtures/trust"
+SIGN_KEY_PASSWORD=signKeyPassword
+DAYS=3650
+
+WORK_DIR=$(mktemp -d)
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+cat > "$WORK_DIR/ext.cnf" <<'EOF'
+[req]
+distinguished_name = dn
+[dn]
+
+[ca]
+basicConstraints = critical, CA:TRUE, pathlen:0
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+
+[ca_no_certsign]
+basicConstraints = critical, CA:TRUE
+keyUsage = critical, digitalSignature
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+
+[ca_no_bc]
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+
+[sign]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, nonRepudiation
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+
+[sign_no_akid]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, nonRepudiation
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = none
+
+[sign_nonrepudiation]
+basicConstraints = CA:FALSE
+keyUsage = critical, nonRepudiation
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+
+[sign_no_keyusage]
+basicConstraints = CA:FALSE
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+
+[sign_critical_unknown]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, nonRepudiation
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+1.3.6.1.4.1.55555.1 = critical, ASN1:UTF8String:unknown
+
+[sign_noncritical_unknown]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, nonRepudiation
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+1.3.6.1.4.1.55555.1 = ASN1:UTF8String:unknown
+
+[names]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+
+[noext]
+subjectKeyIdentifier = none
+authorityKeyIdentifier = none
+
+[bmp_req]
+distinguished_name = dn
+string_mask = MASK:0x800
+EOF
+
+# genkey <file>
+genkey() {
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$1" 2>/dev/null
+}
+
+# issue <name> <subject> <extension section> <issuer cert> <issuer key> [issuer key password] [x509 options...]
+# Issues $WORK_DIR/<name>.cert.pem for a new key, $WORK_DIR/<name>.key.pem.
+issue() {
+    name=$1 subject=$2 section=$3 issuer_cert=$4 issuer_key=$5 issuer_password=${6:-}
+    shift 6 2>/dev/null || shift $#
+    genkey "$WORK_DIR/$name.key.pem"
+    openssl req -new -key "$WORK_DIR/$name.key.pem" -subj "$subject" \
+        -config "$WORK_DIR/ext.cnf" -out "$WORK_DIR/$name.csr"
+    openssl x509 -req -in "$WORK_DIR/$name.csr" -sha256 -days "$DAYS" \
+        -CA "$issuer_cert" -CAkey "$issuer_key" -passin "pass:$issuer_password" \
+        -set_serial "0x$(openssl rand -hex 16)" \
+        -extfile "$WORK_DIR/ext.cnf" -extensions "$section" "$@" \
+        -out "$WORK_DIR/$name.cert.pem" 2>/dev/null
+}
+
+ROOT_CERT="$CERTS/root.cert.pem"
+ROOT_KEY="$CERTS/root.key.pem"
+INT_CERT="$CERTS/intermediate.cert.pem"
+INT_KEY="$CERTS/intermediate.key.pem"
+
+subject() {
+    echo "/C=DK/O=Lothbrok Ltd/OU=$1/CN=www.lothbrok.dk"
+}
+
+# Signing certificates issued by the trusted intermediate.
+issue issued "$(subject 'Issued Dept')" sign "$INT_CERT" "$INT_KEY"
+issue expired "$(subject 'Expired Dept')" sign "$INT_CERT" "$INT_KEY" "" \
+    -not_before 20200101000000Z -not_after 20210101000000Z
+issue not-yet-valid "$(subject 'Future Dept')" sign "$INT_CERT" "$INT_KEY" "" \
+    -not_before 20990101000000Z -not_after 20991231235959Z
+issue nonrepudiation "$(subject 'Non Repudiation Dept')" sign_nonrepudiation "$INT_CERT" "$INT_KEY"
+issue no-keyusage "$(subject 'No Key Usage Dept')" sign_no_keyusage "$INT_CERT" "$INT_KEY"
+issue critical-unknown "$(subject 'Critical Extension Dept')" sign_critical_unknown "$INT_CERT" "$INT_KEY"
+issue noncritical-unknown "$(subject 'Extension Dept')" sign_noncritical_unknown "$INT_CERT" "$INT_KEY"
+
+# A signing certificate issued by the root directly.
+issue by-root "$(subject 'Root Issued Dept')" sign "$ROOT_CERT" "$ROOT_KEY"
+
+# A signing certificate issued by sign.cert.pem, which is not a CA.
+issue rogue "$(subject 'Rogue Dept')" sign "$CERTS/sign.cert.pem" "$CERTS/sign.key.pem" "$SIGN_KEY_PASSWORD"
+
+# Intermediate CAs issued by the root, each with a signing certificate.
+issue other-intermediate "$(subject 'Other Intermediate Dept')" ca "$ROOT_CERT" "$ROOT_KEY"
+issue other-signer "$(subject 'Other Signer Dept')" sign "$WORK_DIR/other-intermediate.cert.pem" "$WORK_DIR/other-intermediate.key.pem"
+issue no-certsign-intermediate "$(subject 'No Cert Sign Dept')" ca_no_certsign "$ROOT_CERT" "$ROOT_KEY"
+issue no-certsign-signer "$(subject 'No Cert Sign Signer Dept')" sign "$WORK_DIR/no-certsign-intermediate.cert.pem" "$WORK_DIR/no-certsign-intermediate.key.pem"
+issue no-bc-intermediate "$(subject 'No Basic Constraints Dept')" ca_no_bc "$ROOT_CERT" "$ROOT_KEY"
+issue no-bc-signer "$(subject 'No Basic Constraints Signer Dept')" sign "$WORK_DIR/no-bc-intermediate.cert.pem" "$WORK_DIR/no-bc-intermediate.key.pem"
+issue expired-intermediate "$(subject 'Expired Intermediate Dept')" ca "$ROOT_CERT" "$ROOT_KEY" "" \
+    -not_before 20200101000000Z -not_after 20210101000000Z
+issue expired-intermediate-signer "$(subject 'Expired Intermediate Signer Dept')" sign "$WORK_DIR/expired-intermediate.cert.pem" "$WORK_DIR/expired-intermediate.key.pem"
+
+# An intermediate CA issued by the trusted intermediate, whose path length
+# is 0: the signing certificate it issues exceeds it.
+issue sub-intermediate "$(subject 'Sub Intermediate Dept')" ca "$INT_CERT" "$INT_KEY"
+issue sub-signer "$(subject 'Sub Signer Dept')" sign "$WORK_DIR/sub-intermediate.cert.pem" "$WORK_DIR/sub-intermediate.key.pem"
+
+# A root without any extension (OpenSSL no longer writes version 1
+# certificates: it is a version 3 one), and a signing certificate it issued.
+# Without basic constraints nor key usage, and not being of version 1, it is
+# no CA for OpenSSL.
+genkey "$WORK_DIR/noext-root.key.pem"
+openssl req -new -key "$WORK_DIR/noext-root.key.pem" -subj "/C=DK/O=Lothbrok Ltd/CN=No Extension Root" \
+    -config "$WORK_DIR/ext.cnf" -out "$WORK_DIR/noext-root.csr"
+openssl x509 -req -in "$WORK_DIR/noext-root.csr" -sha256 -days "$DAYS" \
+    -key "$WORK_DIR/noext-root.key.pem" -set_serial "0x$(openssl rand -hex 16)" \
+    -extfile "$WORK_DIR/ext.cnf" -extensions noext \
+    -out "$WORK_DIR/noext-root.cert.pem" 2>/dev/null
+issue noext-signer "$(subject 'No Extension Signer Dept')" sign "$WORK_DIR/noext-root.cert.pem" "$WORK_DIR/noext-root.key.pem"
+
+# A forged signing certificate: issuer name of the trusted intermediate,
+# no authority key identifier, signed by another key. Only the signature of
+# the link tells it from a certificate the intermediate issued.
+genkey "$WORK_DIR/forger.key.pem"
+openssl req -new -x509 -sha256 -days "$DAYS" -key "$WORK_DIR/forger.key.pem" \
+    -subj "$(openssl x509 -in "$INT_CERT" -noout -subject -nameopt compat | sed 's/^subject=//')" \
+    -config "$WORK_DIR/ext.cnf" -extensions ca \
+    -out "$WORK_DIR/forger.cert.pem" 2>/dev/null
+issue forged "$(subject 'Forged Dept')" sign_no_akid "$WORK_DIR/forger.cert.pem" "$WORK_DIR/forger.key.pem"
+rm "$WORK_DIR/forger.key.pem" "$WORK_DIR/forger.cert.pem"
+
+# Two CAs with the same name, issued by the root: a certificate of the
+# second one is told from the first one by its authority key identifier.
+issue twin-a "$(subject 'Twin CA')" ca "$ROOT_CERT" "$ROOT_KEY"
+issue twin-b "$(subject 'Twin CA')" ca "$ROOT_CERT" "$ROOT_KEY"
+issue twin-b-signer "$(subject 'Twin Signer Dept')" sign "$WORK_DIR/twin-b.cert.pem" "$WORK_DIR/twin-b.key.pem"
+
+# Two CAs with the same name, one with an RSA key and one with an EC key: a
+# certificate the EC one issued, without authority key identifier, is told
+# from the RSA one by its signature algorithm (ECDSA).
+issue twin-rsa "$(subject 'Twin Key CA')" ca "$ROOT_CERT" "$ROOT_KEY"
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$WORK_DIR/twin-ec.key.pem" 2>/dev/null
+openssl req -new -key "$WORK_DIR/twin-ec.key.pem" -subj "$(subject 'Twin Key CA')" \
+    -config "$WORK_DIR/ext.cnf" -out "$WORK_DIR/twin-ec.csr"
+openssl x509 -req -in "$WORK_DIR/twin-ec.csr" -sha256 -days "$DAYS" \
+    -CA "$ROOT_CERT" -CAkey "$ROOT_KEY" -set_serial "0x$(openssl rand -hex 16)" \
+    -extfile "$WORK_DIR/ext.cnf" -extensions ca -out "$WORK_DIR/twin-ec.cert.pem" 2>/dev/null
+issue twin-ec-signer "$(subject 'Twin Key Signer Dept')" sign_no_akid "$WORK_DIR/twin-ec.cert.pem" "$WORK_DIR/twin-ec.key.pem"
+
+# Two CAs with the same name, the first one expired: a certificate the
+# second one issued, without authority key identifier, is told from the
+# first one by the validity dates (OpenSSL prefers an issuer valid at the
+# current date).
+issue twin-old "$(subject 'Twin Time CA')" ca "$ROOT_CERT" "$ROOT_KEY" "" \
+    -not_before 20200101000000Z -not_after 20210101000000Z
+issue twin-new "$(subject 'Twin Time CA')" ca "$ROOT_CERT" "$ROOT_KEY"
+issue twin-new-signer "$(subject 'Twin Time Signer Dept')" sign_no_akid "$WORK_DIR/twin-new.cert.pem" "$WORK_DIR/twin-new.key.pem"
+
+# Subjects for the reading of names, signed by their own key.
+# names: repeated and multi-valued fields, characters that the one-line
+# form does not escape, and fields of less usual types.
+genkey "$WORK_DIR/names.key.pem"
+openssl req -new -x509 -sha256 -days "$DAYS" -key "$WORK_DIR/names.key.pem" \
+    -multivalue-rdn \
+    -subj '/C=DK/ST=Jylland/L=Kattegat/O=Lothbrok\/Sons, Ltd/OU=A\+B=C/OU=Second Dept/CN=www.lothbrok.dk+serialNumber=42/emailAddress=ivar@lothbrok.dk/DC=example/DC=org/UID=ivar/title=Jarl/SN=Lothbrok/GN=Ivar/street=1 Main St/postalCode=1000/1.3.6.1.4.1.55555.2=custom' \
+    -set_serial "0x$(openssl rand -hex 16)" \
+    -config "$WORK_DIR/ext.cnf" -extensions names \
+    -out "$WORK_DIR/names.cert.pem" 2>/dev/null
+rm "$WORK_DIR/names.key.pem"
+# utf8: characters out of ASCII, in UTF8String.
+genkey "$WORK_DIR/utf8.key.pem"
+openssl req -new -x509 -sha256 -days "$DAYS" -key "$WORK_DIR/utf8.key.pem" -utf8 \
+    -subj '/C=DK/O=Lothbrok Ltée/OU=Département Écriture/CN=日本語 Ægir' \
+    -set_serial "0x$(openssl rand -hex 16)" \
+    -config "$WORK_DIR/ext.cnf" -extensions names \
+    -out "$WORK_DIR/utf8.cert.pem" 2>/dev/null
+rm "$WORK_DIR/utf8.key.pem"
+# bmp: the same characters, in BMPString.
+genkey "$WORK_DIR/bmp.key.pem"
+sed 's/^\[bmp_req\]$/[req]/; t; s/^\[req\]$/[unused_req]/' "$WORK_DIR/ext.cnf" > "$WORK_DIR/bmp.cnf"
+openssl req -new -x509 -sha256 -days "$DAYS" -key "$WORK_DIR/bmp.key.pem" -utf8 \
+    -subj '/O=Lothbrok Ltée/CN=Ægir Plain' \
+    -set_serial "0x$(openssl rand -hex 16)" \
+    -config "$WORK_DIR/bmp.cnf" -extensions names \
+    -out "$WORK_DIR/bmp.cert.pem" 2>/dev/null
+rm "$WORK_DIR/bmp.key.pem"
+
+# Consistency checks: what OpenSSL itself says of the chains.
+openssl verify -CAfile "$ROOT_CERT" -untrusted "$INT_CERT" "$WORK_DIR/issued.cert.pem" >/dev/null
+openssl verify -CAfile "$ROOT_CERT" -untrusted "$WORK_DIR/other-intermediate.cert.pem" "$WORK_DIR/other-signer.cert.pem" >/dev/null
+if openssl verify -CAfile "$WORK_DIR/noext-root.cert.pem" "$WORK_DIR/noext-signer.cert.pem" >/dev/null 2>&1; then
+    echo "noext-root.cert.pem should not be a CA." >&2
+    exit 1
+fi
+if openssl verify -CAfile "$ROOT_CERT" -untrusted "$INT_CERT" -untrusted "$WORK_DIR/sub-intermediate.cert.pem" "$WORK_DIR/sub-signer.cert.pem" >/dev/null 2>&1; then
+    echo "sub-signer.cert.pem should exceed the path length of the intermediate." >&2
+    exit 1
+fi
+
+mkdir -p "$OUT_DIR"
+rm -f "$OUT_DIR"/*.pem
+for f in "$WORK_DIR"/*.cert.pem "$WORK_DIR"/*.key.pem; do
+    cp "$f" "$OUT_DIR/"
+done
+chown "$HOST_UID:$HOST_GID" "$OUT_DIR"/*.pem
+echo "Certificates written to test/fixtures/trust/:" >&2
+(cd "$OUT_DIR" && ls ./*.pem | sed 's#^\./#  #') >&2
