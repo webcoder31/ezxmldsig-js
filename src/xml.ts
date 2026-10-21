@@ -115,7 +115,7 @@ export function loadXML(xml: unknown, what: string): Document {
  *     warning, if the document holds a character XML 1.0 cannot hold, or if
  *     it nests elements deeper than libxml accepts.
  */
-export function parse(text: string): Document | null {
+export function parse(text: string, maxDepth = MAX_DEPTH): Document | null {
   if (INVALID_XML_CHARS.test(text)) {
     return null;
   }
@@ -131,7 +131,7 @@ export function parse(text: string): Document | null {
   } catch {
     return null;
   }
-  if (failed || doc.documentElement === null || !isAcceptable(doc)) {
+  if (failed || doc.documentElement === null || !isAcceptable(doc, maxDepth)) {
     return null;
   }
 
@@ -140,16 +140,17 @@ export function parse(text: string): Document | null {
 
 /**
  * Indicates whether a parsed document holds only characters XML 1.0 can
- * hold, and nests elements no deeper than libxml accepts (`MAX_DEPTH`). An
+ * hold, and nests elements no deeper than libxml accepts (`MAX_DEPTH`, by
+ * default). An
  * invalid character can only come from a character reference (`&#0;`),
  * which xmldom accepts: the text was checked before parsing. The walk is
  * iterative: a deeply nested document cannot exhaust the stack.
  */
-function isAcceptable(doc: Document): boolean {
+function isAcceptable(doc: Document, maxDepth: number): boolean {
   const pending: Array<[Node, number]> = [[doc, 0]];
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
     const [node, depth] = item;
-    if (depth > MAX_DEPTH) {
+    if (depth > maxDepth) {
       return false;
     }
     if (node.nodeValue !== null && INVALID_XML_CHARS.test(node.nodeValue)) {
@@ -167,4 +168,26 @@ function isAcceptable(doc: Document): boolean {
     }
   }
   return true;
+}
+
+/**
+ * Parses an XML fragment (the plaintext of an encrypted token), as PHP does
+ * (`DOMDocumentFragment::appendXML()`): any content XML allows in an
+ * element, without document type declaration, nor namespace declared
+ * around it. It is parsed inside a wrapping element, which cannot be closed
+ * by the fragment without leaving the document malformed.
+ *
+ * @returns The nodes of the fragment, in a document of their own, or null
+ *     if the fragment is not well formed, holds `<!DOCTYPE` or a character
+ *     XML 1.0 cannot hold, or nests elements deeper than libxml accepts.
+ */
+export function parseFragment(text: string): Node[] | null {
+  if (text === '' || text.includes('<!DOCTYPE')) {
+    return null;
+  }
+  const doc = parse(`<fragment>${text}</fragment>`, MAX_DEPTH + 1);
+  if (doc === null) {
+    return null;
+  }
+  return Array.from((doc.documentElement as Node).childNodes);
 }

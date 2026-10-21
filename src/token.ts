@@ -8,7 +8,7 @@
  * http://www.cecill.info
  */
 
-import { createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify, type KeyObject } from 'node:crypto';
+import { X509Certificate, createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify, type KeyObject } from 'node:crypto';
 import { inspect } from 'node:util';
 
 import type { Document, Element, Node } from '@xmldom/xmldom';
@@ -31,7 +31,8 @@ import {
   type TokenOptions,
 } from './options.js';
 import { X509Cert, type NameFields } from './x509.js';
-import { loadXML } from './xml.js';
+import { loadXML, parseFragment } from './xml.js';
+import { decryptKey, decryptSymmetric, encryptKey, encryptSymmetric, generateSessionKey } from './xmlenc.js';
 
 /** A value of the token data: a leaf, or nested values. */
 export type TokenValue = string | number | boolean | null | Uint8Array | TokenData;
@@ -82,6 +83,16 @@ const WITHOUT_COMMENTS: Readonly<Record<string, string>> = {
   [alg.C14N_COMMENTS]: alg.C14N,
   [alg.EXC_C14N_COMMENTS]: alg.EXC_C14N,
 };
+
+/** The algorithms xmlseclibs knows (`XMLSecurityKey`): the first
+"xenc:EncryptionMethod" of an encrypted node must name one of them, or the
+key it describes cannot be located. */
+const XMLSECLIBS_ALGORITHMS: ReadonlySet<string> = new Set([
+  alg.TRIPLEDES_CBC, alg.AES128_CBC, alg.AES192_CBC, alg.AES256_CBC, alg.AES128_GCM, alg.AES192_GCM, alg.AES256_GCM,
+  `${alg.XMLENC_NS}rsa-1_5`, alg.RSA_OAEP_MGF1P, 'http://www.w3.org/2009/xmlenc11#rsa-oaep',
+  'http://www.w3.org/2000/09/xmldsig#dsa-sha1', alg.RSA_SHA1, alg.RSA_SHA256, alg.RSA_SHA384, alg.RSA_SHA512,
+  'http://www.w3.org/2000/09/xmldsig#hmac-sha1',
+]);
 
 const select = xpath.useNamespaces({ ds: alg.XMLDSIG_NS, xenc: alg.XMLENC_NS });
 
@@ -389,14 +400,138 @@ export class XMLDSigToken {
     return new XMLDSigToken(xml, false, null, null, null, null, null, null, options);
   }
 
-  /** Loads the encryption parameters of a token creation (step 4). */
-  #loadEncryptionParameters(_cryptCertPath: unknown, _cryptKeyPath: unknown, _cryptKeyPassword: unknown, _options: TokenOptions): void {
-    throw new Error('Encrypted tokens are not supported yet.');
+  /**
+   * Creates a signed token whose data are encrypted for the owner of the
+   * encryption certificate: only the private key of this certificate
+   * decrypts them. The sender does not need this private key: pass null as
+   * `cryptKeyPath`.
+   *
+   * The created token is checked right away. Without `cryptKeyPath`, the
+   * check covers everything that can be verified without decrypting the
+   * token (structure, algorithms, digest, signature, trust in the signing
+   * certificate): `isSignatureValid()` and `isDataEncrypted()` return true,
+   * while `getData()`, `getTimestamp()`, `getTokenId()`, `getAudience()`
+   * and `getExpiry()` return null. With `cryptKeyPath`, the token is also
+   * decrypted and its content read.
+   *
+   * @param data The token data (see `createXMLToken()`).
+   * @param signKeyPath The private key that signs the token, in PEM format.
+   * @param signCertPath The X.509 certificate of this key, in PEM format.
+   * @param cryptKeyPath The private key of the recipient, in PEM format, to
+   *     check the content of the created token; null without it.
+   * @param cryptCertPath The encryption certificate of the recipient, in
+   *     PEM format.
+   * @param signKeyPassword The password of the signing key, if any.
+   * @param cryptKeyPassword The password of the private key of the
+   *     recipient, if any (null without `cryptKeyPath`).
+   * @param options The options (see the README).
+   */
+  static createSecureXMLToken(
+    data: TokenData,
+    signKeyPath: PemSource,
+    signCertPath: PemSource,
+    cryptKeyPath: PemSource | null,
+    cryptCertPath: PemSource,
+    signKeyPassword: string | null = null,
+    cryptKeyPassword: string | null = null,
+    options: TokenOptions = {},
+  ): XMLDSigToken {
+    // Without an encryption certificate, the token would not be encrypted.
+    if (cryptCertPath === null || cryptCertPath === undefined) {
+      throw new Error("Missing parameter 'cryptCertPath'! An X.509 certificate is required to encrypt token.");
+    }
+    return new XMLDSigToken(data, true, signKeyPath, signKeyPassword, signCertPath, cryptKeyPath, cryptKeyPassword, cryptCertPath, options);
   }
 
-  /** Loads the decryption parameters of a token analysis (step 4). */
-  #loadDecryptionParameters(_cryptKeyPath: unknown, _cryptKeyPassword: unknown, _options: TokenOptions): void {
-    throw new Error('Encrypted tokens are not supported yet.');
+  /**
+   * Analyzes an XML token whose data are encrypted, with the private key of
+   * the recipient. An unencrypted token can also be analyzed this way.
+   *
+   * The token is only decrypted once its structure, its algorithms, its
+   * digest, its signature and the trust in its certificate have been
+   * verified, and every failure of the decryption gives the same error,
+   * `Token decryption failed!`.
+   *
+   * @param xml The XML token, as a string or as the bytes of its UTF-8
+   *     encoding.
+   * @param cryptKeyPath The private key of the recipient, in PEM format:
+   *     the path of its file, or its content.
+   * @param cryptKeyPassword The password of this key, if any.
+   * @param options The options, trust anchor included (see the README).
+   */
+  static analyzeSecureXMLToken(
+    xml: string | Uint8Array,
+    cryptKeyPath: PemSource,
+    cryptKeyPassword: string | null = null,
+    options: TokenOptions = {},
+  ): XMLDSigToken {
+    return new XMLDSigToken(xml, false, null, null, null, cryptKeyPath, cryptKeyPassword, null, options);
+  }
+
+  /**
+   * Loads the encryption parameters of a token creation: the encryption
+   * certificate, the private key of the recipient if given (only to check
+   * the created token), and the encryption algorithms.
+   */
+  #loadEncryptionParameters(cryptCertPath: unknown, cryptKeyPath: unknown, cryptKeyPassword: unknown, options: TokenOptions): void {
+    this.#cryptCert = readPem(cryptCertPath);
+    if (this.#cryptCert === null) {
+      throw new Error("Invalid parameter 'cryptCertPath'! Cannot read X.509 certificate to encrypt token.");
+    }
+    if (cryptKeyPath !== null && cryptKeyPath !== undefined) {
+      this.#cryptKey = readPem(cryptKeyPath);
+      if (this.#cryptKey === null) {
+        throw new Error("Invalid parameter 'cryptKeyPath'! Cannot read private key to decrypt token.");
+      }
+    }
+    // A password without a key would be ignored: it throws instead.
+    if (cryptKeyPassword !== null && cryptKeyPassword !== undefined) {
+      if (cryptKeyPath === null || cryptKeyPath === undefined) {
+        throw new Error("Invalid parameter 'cryptKeyPassword'! It only applies with the parameter 'cryptKeyPath'.");
+      }
+      if (typeof cryptKeyPassword !== 'string') {
+        throw new Error("Invalid parameter 'cryptKeyPassword'! Parameter must be a string.");
+      }
+      this.#cryptKeyPassword = cryptKeyPassword;
+    }
+    this.#loadEncryptionAlgorithms(options);
+  }
+
+  /**
+   * Loads the decryption parameters of a token analysis: the private key of
+   * the recipient, and the expected encryption algorithms.
+   */
+  #loadDecryptionParameters(cryptKeyPath: unknown, cryptKeyPassword: unknown, options: TokenOptions): void {
+    this.#cryptKey = readPem(cryptKeyPath);
+    if (this.#cryptKey === null) {
+      throw new Error("Invalid parameter 'cryptKeyPath'! Cannot read private key to decrypt token.");
+    }
+    if (cryptKeyPassword !== null && cryptKeyPassword !== undefined) {
+      if (typeof cryptKeyPassword !== 'string') {
+        throw new Error("Invalid parameter 'cryptKeyPassword'! Parameter must be a string.");
+      }
+      this.#cryptKeyPassword = cryptKeyPassword;
+    }
+    this.#loadEncryptionAlgorithms(options);
+  }
+
+  /** Loads the options of the encryption algorithms. */
+  #loadEncryptionAlgorithms(options: TokenOptions): void {
+    if (options.sessionKeyCipheringAlgorithm !== undefined) {
+      if (!isValidSymmetricCipheringAlgorithm(options.sessionKeyCipheringAlgorithm)) {
+        throw new Error("Invalid parameter 'sessionKeyCipheringAlgorithm'! Unknown session key ciphering algorithm.");
+      }
+      this.#sessionKeyCipheringAlgorithm = options.sessionKeyCipheringAlgorithm;
+    }
+    if (options.cryptAlgorithm !== undefined) {
+      if (!isValidKeyTransportAlgorithm(options.cryptAlgorithm)) {
+        throw new Error("Invalid parameter 'cryptAlgorithm'! Unknown crypt algorithm.");
+      }
+      this.#cryptAlgorithm = options.cryptAlgorithm;
+    }
+    if (options.checkCryptingAlgorithms === false) {
+      this.#checkCryptingAlgorithms = false;
+    }
   }
 
   /**
@@ -419,9 +554,34 @@ export class XMLDSigToken {
     token += writeData(TOKEN_DATA_NAME, data, this.#base64EncodeData);
     token += `</${TOKEN_NAME}>`;
 
-    const objectContent = token;
-
     const p = this.#xmldsigNsPrefix === '' ? '' : `${this.#xmldsigNsPrefix}:`;
+
+    // The node "Token" is encrypted if an encryption certificate is given:
+    // the node "xenc:EncryptedData", of type Element, replaces it, with the
+    // session key encrypted for the recipient in its "ds:KeyInfo".
+    let objectContent = token;
+    if (this.#cryptCert !== null) {
+      let publicKey: KeyObject;
+      try {
+        publicKey = new X509Certificate(this.#cryptCert).publicKey;
+      } catch {
+        throw new Error('Unable to extract public key');
+      }
+      const sessionKey = generateSessionKey(this.#sessionKeyCipheringAlgorithm);
+      let encryptedKey: Buffer;
+      try {
+        encryptedKey = encryptKey(publicKey, sessionKey);
+      } catch {
+        throw new Error('Failure encrypting Data (openssl public)');
+      }
+      const encryptedData = encryptSymmetric(this.#sessionKeyCipheringAlgorithm, sessionKey, Buffer.from(token, 'utf8'));
+      objectContent = `<xenc:EncryptedData xmlns:xenc="${alg.XMLENC_NS}" Type="${alg.XMLENC_NS}Element">`
+        + `<xenc:EncryptionMethod Algorithm="${escapeAttribute(this.#sessionKeyCipheringAlgorithm)}"/>`
+        + `<${p}KeyInfo xmlns:dsig="${alg.XMLDSIG_NS}"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm="${escapeAttribute(this.#cryptAlgorithm)}"/>`
+        + `<xenc:CipherData><xenc:CipherValue>${encryptedKey.toString('base64')}</xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></${p}KeyInfo>`
+        + `\n   <xenc:CipherData>\n      <xenc:CipherValue>${encryptedData.toString('base64')}</xenc:CipherValue>\n   </xenc:CipherData>\n</xenc:EncryptedData>`;
+    }
+
     const certificates = extractCertificates(this.#signCert as string);
     const document = (digestValue: string, signatureValue: string) => '<?xml version="1.0"?>\n'
       + `<${p}Signature ${p === '' ? 'xmlns' : `xmlns:${this.#xmldsigNsPrefix}`}="${alg.XMLDSIG_NS}">\n`
@@ -808,12 +968,83 @@ export class XMLDSigToken {
     }
   }
 
-  /** Decrypts the node "xenc:EncryptedData" in place (step 4). */
-  #decryptToken(_encryptedData: Element): void {
+  /**
+   * Decrypts the node "xenc:EncryptedData" in place, as the PHP library
+   * does (`_decryptToken()`, with xmlseclibs).
+   *
+   * The failures that do not depend on the token content (no decryption
+   * key, a key that cannot be loaded) or only on its structure have their
+   * own message. Every failure that depends on the decrypted content
+   * (session key, token data, parsing of the decrypted XML) gives the same
+   * error, without its reason: a message per failure would tell an attacker
+   * who can submit altered tokens which step failed, which is how padding
+   * oracles (Bleichenbacher on RSA 1.5, Jager-Somorovsky on CBC) decrypt a
+   * token step by step. `#readXML()` only calls this function once the
+   * digest, the signature, the certificate and the algorithms of the token
+   * have been verified.
+   *
+   * The plaintext replaces the node "xenc:EncryptedData" as an XML fragment,
+   * for the type Element as for the type Content: it cannot hold a document
+   * type declaration.
+   */
+  #decryptToken(encryptedData: Element): void {
     if (this.#cryptKey === null) {
       throw new Error('Token is encrypted but no private key is provided for decryption!');
     }
-    throw new Error('Encrypted tokens are not supported yet.');
+
+    // The algorithm of the data is that of the first "xenc:EncryptionMethod"
+    // below "xenc:EncryptedData", as xmlseclibs finds it.
+    const dataAlgorithm = (nodes('.//xenc:EncryptionMethod', encryptedData)[0] as Element | undefined)?.getAttribute('Algorithm') ?? null;
+    if (dataAlgorithm === null || !XMLSECLIBS_ALGORITHMS.has(dataAlgorithm)) {
+      throw new Error('Cannot locate session key ciphering algorithm!');
+    }
+
+    // The encrypted session key: the first child "EncryptedKey" of the
+    // "ds:KeyInfo" of "xenc:EncryptedData".
+    const keyInfo = nodes('ds:KeyInfo', encryptedData)[0] as Element | undefined;
+    let encryptedKey: Element | undefined;
+    for (let child = keyInfo?.firstChild ?? null; child !== null && encryptedKey === undefined; child = child.nextSibling) {
+      if (isElement(child) && child.localName === 'EncryptedKey') {
+        encryptedKey = child;
+      }
+    }
+    if (encryptedKey === undefined) {
+      throw new Error('Cannot locate session key!');
+    }
+    const keyAlgorithm = (nodes('.//xenc:EncryptionMethod', encryptedKey)[0] as Element | undefined)?.getAttribute('Algorithm') ?? null;
+    if (keyAlgorithm === null || !XMLSECLIBS_ALGORITHMS.has(keyAlgorithm)) {
+      throw new Error('Unable to locate algorithm for this Encrypted Key');
+    }
+
+    let privateKey: KeyObject;
+    try {
+      privateKey = createPrivateKey({ key: this.#cryptKey, format: 'pem', ...(this.#cryptKeyPassword === null ? {} : { passphrase: this.#cryptKeyPassword }) });
+    } catch {
+      throw new Error('Failed loading private key to decrypt session key!');
+    }
+
+    // From here on, every failure gives the same error.
+    let fragment: Node[] | null = null;
+    try {
+      const cipherValue = (element: Element) => phpBase64Decode(evaluate('xenc:CipherData/xenc:CipherValue', element));
+      if (keyAlgorithm === alg.RSA_OAEP_MGF1P && isValidSymmetricCipheringAlgorithm(dataAlgorithm)) {
+        const sessionKey = decryptKey(privateKey, cipherValue(encryptedKey));
+        const plaintext = decryptSymmetric(dataAlgorithm, sessionKey, cipherValue(encryptedData));
+        fragment = parseFragment(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(plaintext));
+      }
+    } catch {
+      fragment = null;
+    }
+    if (fragment === null) {
+      throw new Error(DECRYPTION_FAILED);
+    }
+
+    const doc = encryptedData.ownerDocument as Document;
+    const parent = encryptedData.parentNode as Node;
+    for (const child of fragment) {
+      parent.insertBefore(doc.importNode(child, true), encryptedData);
+    }
+    parent.removeChild(encryptedData);
   }
 
   /**

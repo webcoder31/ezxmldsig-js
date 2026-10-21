@@ -90,7 +90,9 @@ export function utc(offset: number): string {
 export type ForgeStep =
   | { op: 'redigest' }
   | { op: 'resign'; key: string; password?: string | null; cert: string }
-  | { op: 'replaceCertificate'; cert: string };
+  | { op: 'replaceCertificate'; cert: string }
+  | { op: 'encrypt'; cert: string; cipher: string; keyTransport: string; type: 'Element' | 'Content' }
+  | { op: 'encryptPlaintext'; cert: string; plaintext: string };
 
 /** The steps that sign a token again with the trusted signing key. */
 export const SIGN_AGAIN: ForgeStep[] = [
@@ -156,8 +158,7 @@ const analyses: Array<{ name: string; analysis: Analysis; ours: PhpResult }> = [
 export function analyze(name: string, analysis: Analysis): XMLDSigToken {
   const token = analysis.cryptKey === undefined
     ? XMLDSigToken.analyzeXMLToken(analysis.xml, analysis.options ?? {})
-    : (XMLDSigToken as unknown as { analyzeSecureXMLToken: (...args: unknown[]) => XMLDSigToken })
-      .analyzeSecureXMLToken(analysis.xml, analysis.cryptKey, analysis.cryptKeyPassword ?? null, analysis.options ?? {});
+    : XMLDSigToken.analyzeSecureXMLToken(analysis.xml, analysis.cryptKey, analysis.cryptKeyPassword ?? null, analysis.options ?? {});
   analyses.push({ name, analysis, ours: summarize(token, analysis.ttl) });
   return token;
 }
