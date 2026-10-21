@@ -22,8 +22,18 @@
  *   isTrustedBy() for each list of "trustedBy" and isValidCA() for each
  *   certificate of "validCA", in the same order.
  *
+ * - "forge": alters the token "xml" with the class Forge of the attack lab
+ *   of the PHP library demo, which works with xmlseclibs, not with
+ *   XMLDSigToken. Field: "steps", a list of {"op": "redigest"} (digest of
+ *   ds:Object computed again), {"op": "resign", "key", "password", "cert"}
+ *   (ds:SignedInfo signed again, and the certificate replaced) or
+ *   {"op": "replaceCertificate", "cert"}. Result: {"xml": the altered
+ *   token}.
+ *
  * - "constants": the constants of XMLDSigToken (no field). Result: an
  *   object of their names and values.
+ *
+ * Token data that are not UTF-8 text are given as {"bytes": base64}.
  *
  * The algorithm options are given by their URIs, the values of the
  * constants of XMLDSigToken. The result of an analysis holds what the
@@ -32,9 +42,24 @@
  */
 
 require '/ezxmldsig/vendor/autoload.php';
+require '/ezxmldsig/demo/src/Forge.php';
 
+use webcoder31\ezxmldsig\Demo\Forge;
 use webcoder31\ezxmldsig\X509Cert;
 use webcoder31\ezxmldsig\XMLDSigToken;
+
+/**
+ * Gives the values of token data that are not UTF-8 text as
+ * {"bytes": base64}, which JSON can hold.
+ */
+function jsonData($data)
+{
+    if (is_array($data))
+    {
+        return array_map('jsonData', $data);
+    }
+    return is_string($data) && !mb_check_encoding($data, 'UTF-8') ? ['bytes' => base64_encode($data)] : $data;
+}
 
 /**
  * Returns what the accessors of a token return.
@@ -44,12 +69,14 @@ function describe(XMLDSigToken $token, $ttl)
     return [
         'xml'              => $token->getXML(),
         'isSignatureValid' => $token->isSignatureValid(),
+        'isDigestValueOk'  => $token->isDigestValueOk(),
+        'isSignatureValueOk' => $token->isSignatureValueOk(),
         'isCertTrusted'    => $token->isCertTrusted(),
         'isDataEncrypted'  => $token->isDataEncrypted(),
         'isOutOfDate'      => $token->isOutOfDate($ttl),
         'error'            => $token->getError(),
         'anomalies'        => $token->getAnomalies(),
-        'data'             => $token->getData(),
+        'data'             => jsonData($token->getData()),
         'timestamp'        => $token->getTimestamp(),
         'tokenId'          => $token->getTokenId(),
         'audience'         => $token->getAudience(),
@@ -123,6 +150,27 @@ function run(array $request)
                     return $cert->isValidCA(file_get_contents($path));
                 }, $request['validCA'] ?? []),
             ];
+
+        case 'forge':
+            $forge = new Forge($request['xml']);
+            foreach ($request['steps'] as $step)
+            {
+                switch ($step['op'])
+                {
+                    case 'redigest':
+                        $forge->redigest();
+                        break;
+                    case 'resign':
+                        $forge->resign($step['key'], $step['password'] ?? null, $step['cert']);
+                        break;
+                    case 'replaceCertificate':
+                        $forge->replaceCertificate($step['cert']);
+                        break;
+                    default:
+                        throw new Exception("Unknown forge step!");
+                }
+            }
+            return ['xml' => $forge->xml()];
 
         case 'constants':
             return (new ReflectionClass(XMLDSigToken::class))->getConstants();

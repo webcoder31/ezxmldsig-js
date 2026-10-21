@@ -66,4 +66,4 @@ fi
 
 exec docker run --rm -i --network none -u "$DOCKER_USER" \
     -v "$PHP_DIR:/ezxmldsig:ro" -v "$ROOT_DIR:/work:ro" -w /work \
-    "php:$PHP_VERSION-cli" php /work/test/php/ezxmldsig.php
+    "php:$PHP_VERSION-cli" php -d display_errors=stderr /work/test/php/ezxmldsig.php

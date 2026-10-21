@@ -235,6 +235,26 @@ issue twin-old "$(subject 'Twin Time CA')" ca "$ROOT_CERT" "$ROOT_KEY" "" \
 issue twin-new "$(subject 'Twin Time CA')" ca "$ROOT_CERT" "$ROOT_KEY"
 issue twin-new-signer "$(subject 'Twin Time Signer Dept')" sign_no_akid "$WORK_DIR/twin-new.cert.pem" "$WORK_DIR/twin-new.key.pem"
 
+# A signing certificate with an EC key (P-256), signed by its own key, and
+# its key: a token it signs with ECDSA, under an RSA signature algorithm,
+# is refused (the PHP library 1.2.0 accepts it).
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$WORK_DIR/ec-signer.key.pem" 2>/dev/null
+openssl req -new -x509 -sha256 -days "$DAYS" -key "$WORK_DIR/ec-signer.key.pem" \
+    -subj "$(subject 'EC Signer Dept')" -set_serial "0x$(openssl rand -hex 16)" \
+    -config "$WORK_DIR/ext.cnf" -extensions names \
+    -out "$WORK_DIR/ec-signer.cert.pem" 2>/dev/null
+
+# A certificate with a DSA key, signed by its own key, with the subject of
+# sign.cert.pem: the signature algorithms of the tokens are RSA ones.
+openssl genpkey -genparam -algorithm DSA -pkeyopt dsa_paramgen_bits:2048 -out "$WORK_DIR/dsa.param.pem" 2>/dev/null
+openssl genpkey -paramfile "$WORK_DIR/dsa.param.pem" -out "$WORK_DIR/dsa.key.pem" 2>/dev/null
+openssl req -new -x509 -sha256 -days "$DAYS" -key "$WORK_DIR/dsa.key.pem" \
+    -subj "$(openssl x509 -in "$CERTS/sign.cert.pem" -noout -subject -nameopt compat | sed 's/^subject=//')" \
+    -set_serial "0x$(openssl rand -hex 16)" \
+    -config "$WORK_DIR/ext.cnf" -extensions names \
+    -out "$WORK_DIR/dsa.cert.pem" 2>/dev/null
+rm "$WORK_DIR/dsa.param.pem" "$WORK_DIR/dsa.key.pem"
+
 # Subjects for the reading of names, signed by their own key.
 # names: repeated and multi-valued fields, characters that the one-line
 # form does not escape, and fields of less usual types.

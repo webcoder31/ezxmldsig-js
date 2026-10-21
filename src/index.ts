@@ -11,3 +11,5 @@
 export * from './algorithms.js';
 export { X509Cert, type NameFields } from './x509.js';
 export type { PemSource } from './material.js';
+export { XMLDSigToken, type TokenData, type TokenValue, type ReadTokenData } from './token.js';
+export type { TokenOptions } from './options.js';
