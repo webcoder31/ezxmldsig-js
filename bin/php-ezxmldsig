@@ -1,0 +1,69 @@
+#!/bin/sh
+#
+# Runs requests against the PHP library ezxmldsig, in Docker, for the tests
+# of the interoperability between the two libraries.
+#
+# Usage:
+#   bin/php-ezxmldsig < requests.json > results.json
+#   bin/php-ezxmldsig --prepare      only fetches the PHP library
+#
+# The requests are a JSON array read on stdin; the results, a JSON array of
+# the same length, are written on stdout (see test/php/ezxmldsig.php for
+# their format). Paths of keys and certificates in the requests are relative
+# to the root of this repository, which the container sees read-only.
+#
+# The PHP library is the tag v1.2.0 of https://github.com/webcoder31/ezxmldsig,
+# cloned once into test/.cache/ezxmldsig-php/ (ignored by git), with its
+# dependencies installed by Composer in the composer:2 image. The environment
+# variable EZXMLDSIG_PHP_DIR names another copy instead (a working copy, for
+# instance), whose vendor/ must be installed. PHP_VERSION picks the image
+# php:<version>-cli (default: 8.3).
+
+set -eu
+
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+PHP_TAG=v1.2.0
+PHP_REPO=https://github.com/webcoder31/ezxmldsig.git
+PHP_VERSION=${PHP_VERSION:-8.3}
+
+case "${1:-}" in
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+if ! docker info >/dev/null 2>&1; then
+    echo "Docker is not reachable (with Colima: colima start)." >&2
+    exit 1
+fi
+
+DOCKER_USER="$(id -u):$(id -g)"
+
+if [ -n "${EZXMLDSIG_PHP_DIR:-}" ]; then
+    PHP_DIR=$(cd "$EZXMLDSIG_PHP_DIR" && pwd)
+    if [ ! -f "$PHP_DIR/vendor/autoload.php" ]; then
+        echo "$PHP_DIR/vendor/ is not installed (bin/deps in that copy)." >&2
+        exit 1
+    fi
+else
+    PHP_DIR="$ROOT_DIR/test/.cache/ezxmldsig-php"
+    if [ ! -f "$PHP_DIR/src/XMLDSigToken.php" ]; then
+        echo "Cloning ezxmldsig $PHP_TAG into test/.cache/ezxmldsig-php." >&2
+        rm -rf "$PHP_DIR"
+        mkdir -p "$ROOT_DIR/test/.cache"
+        git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$PHP_TAG" "$PHP_REPO" "$PHP_DIR"
+    fi
+    if [ ! -f "$PHP_DIR/vendor/autoload.php" ]; then
+        echo "Installing the dependencies of ezxmldsig (composer:2 image)." >&2
+        docker run --rm -u "$DOCKER_USER" -e COMPOSER_HOME=/tmp/composer \
+            -v "$PHP_DIR:/app" -w /app composer:2 \
+            update --no-interaction --no-progress --no-dev --ignore-platform-reqs >&2
+    fi
+fi
+
+if [ "${1:-}" = "--prepare" ]; then
+    exit 0
+fi
+
+exec docker run --rm -i --network none -u "$DOCKER_USER" \
+    -v "$PHP_DIR:/ezxmldsig:ro" -v "$ROOT_DIR:/work:ro" -w /work \
+    "php:$PHP_VERSION-cli" php /work/test/php/ezxmldsig.php
