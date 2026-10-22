@@ -12,8 +12,8 @@
 # their format). Paths of keys and certificates in the requests are relative
 # to the root of this repository, which the container sees read-only.
 #
-# The PHP library is the tag v1.2.0 of https://github.com/webcoder31/ezxmldsig,
-# cloned once into test/.cache/ezxmldsig-php/ (ignored by git), with its
+# The PHP library is the tag v1.2.1 of https://github.com/webcoder31/ezxmldsig,
+# cloned once into test/.cache/ezxmldsig-php-v1.2.1/ (ignored by git), with its
 # dependencies installed by Composer in the composer:2 image. The environment
 # variable EZXMLDSIG_PHP_DIR names another copy instead (a working copy, for
 # instance), whose vendor/ must be installed. PHP_VERSION picks the image
@@ -23,7 +23,7 @@ set -eu
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
-PHP_TAG=v1.2.0
+PHP_TAG=v1.2.1
 PHP_REPO=https://github.com/webcoder31/ezxmldsig.git
 PHP_VERSION=${PHP_VERSION:-8.3}
 
@@ -51,7 +51,9 @@ else
     # while the others wait for it. It is prepared in a directory of its own,
     # then moved into place: a copy is either complete or absent, never half
     # cloned or half installed.
-    PHP_DIR="$ROOT_DIR/test/.cache/ezxmldsig-php"
+    # The directory is named after the tag: a copy of another version is
+    # never taken for this one.
+    PHP_DIR="$ROOT_DIR/test/.cache/ezxmldsig-php-$PHP_TAG"
     LOCK="$PHP_DIR.lock"
     WORK_DIR="$PHP_DIR.tmp"
     ready() { [ -f "$PHP_DIR/vendor/autoload.php" ]; }
@@ -75,7 +77,7 @@ else
         if [ "$LOCKED" = 1 ]; then
             trap 'rm -rf "$WORK_DIR"; rmdir "$LOCK"' EXIT
             if ! ready; then
-                echo "Cloning ezxmldsig $PHP_TAG into test/.cache/ezxmldsig-php." >&2
+                echo "Cloning ezxmldsig $PHP_TAG into test/.cache/ezxmldsig-php-$PHP_TAG." >&2
                 rm -rf "$WORK_DIR" "$PHP_DIR"
                 git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$PHP_TAG" "$PHP_REPO" "$WORK_DIR" >&2
                 echo "Installing the dependencies of ezxmldsig (composer:2 image)." >&2

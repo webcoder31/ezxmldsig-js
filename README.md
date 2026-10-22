@@ -2,7 +2,7 @@
 
 The library **ezxmldsig** creates and verifies XML tokens: enveloping XML digital signatures that carry timestamped user data, optionally encrypted. Use them for token based authentication, single sign-on, or to transmit data whose integrity and origin, and confidentiality when they are encrypted, are protected by the token itself.
 
-It is the Node.js counterpart of the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig), version 1.2: both create and verify **the same tokens**, so that a single sign-on can mix PHP and Node.js nodes. A token created by one is valid for the other, which reads the same data, and both refuse the same forged tokens with the same errors. The class, its methods, its options and its error messages are those of the PHP library, adapted to JavaScript; the differences are listed in [Differences with the PHP library](#differences-with-the-php-library).
+It is the Node.js counterpart of the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig), version 1.2.1: both create and verify **the same tokens**, so that a single sign-on can mix PHP and Node.js nodes. A token created by one is valid for the other, which reads the same data, and both refuse the same forged tokens with the same errors. The class, its methods, its options and its error messages are those of the PHP library, adapted to JavaScript; the differences are listed in [Differences with the PHP library](#differences-with-the-php-library).
 
 The library signs its own tokens only. It does not sign existing XML documents in place, parts of them, or external files: for these, use [xml-crypto](https://www.npmjs.com/package/xml-crypto) directly, or a format designed for document signatures.
 
@@ -287,7 +287,7 @@ The token data are encrypted with a session key generated for each token, and th
 
 ### Interoperability
 
-**With the PHP library.** A token created by the PHP library ezxmldsig 1.2 is valid here, and a token created here is valid for it, signed or encrypted, with every algorithm and option both libraries share; both read the same data, timestamp, identifier, audiences and expiry. The tests of this library check it, under PHP 7.4 and 8.3, and replay the attack lab of the PHP library demo: every forged token gets the same verdict from both libraries. See [Differences with the PHP library](#differences-with-the-php-library) for the few cases where they differ.
+**With the PHP library.** A token created by the PHP library ezxmldsig 1.2.1 or later is valid here, and a token created here is valid for it, signed or encrypted, with every algorithm and option both libraries share; both read the same data, timestamp, identifier, audiences and expiry. The tests of this library check it, under PHP 7.4 and 8.3, and replay the attack lab of the PHP library demo: every forged token gets the same verdict from both libraries. See [Differences with the PHP library](#differences-with-the-php-library) for the few cases where they differ.
 
 **The format of a token.** An enveloping XML digital signature: `ds:Signature` is the document element, and its `ds:Object Id="Token"` holds the node `Token`, referenced by `URI="#Token"`. Inclusive canonicalization for `ds:SignedInfo` and as the only transform, RSA-SHA256 and an SHA-256 digest by default (see [Options](#options)), and the signing certificate in `ds:KeyInfo/ds:X509Data/ds:X509Certificate`. The node `Token` holds, in this order:
 
@@ -429,17 +429,20 @@ const analyzed = XMLDSigToken.analyzeXMLToken(xml, {
 
 ## Differences with the PHP library
 
-The tokens are the same, and so are the verdicts on them, but in these cases:
+With the PHP library 1.2.1 or later, the tokens are the same, and so are the verdicts on them and the error messages, but in these cases:
 
-* **Keys that are not RSA are refused.** The PHP library 1.2.0 accepts a token whose signature is ECDSA (signed with an EC key) while it declares an RSA signature algorithm; this library refuses it, at creation (`The private key to sign token data is not an RSA key!`) and at analysis (`Token hash signature verification failed!`).
-* **Values that are not in base64.** With `base64Encode: false`, the PHP library 1.2.0 reads `&` in a value as the start of an entity reference: `a&amp;b` is written `a&b`, and `a & b` is lost. This library writes every value as text: its tokens hold the values given.
-* **Certificates after 2049.** The PHP library 1.2.0 fails with a PHP error on a certificate whose validity dates are in 2050 or later; this library reads them.
 * **Certification authorities with name constraints** are refused here, where OpenSSL enforces the constraints for the PHP library.
 * **Keys and certificates** are given by the path of their file, as with the PHP library, or by their PEM content.
 * **Values of the data** are read back as strings, or as a `Buffer` when they are not UTF-8 text, where PHP gives strings of bytes; numbers are written as `String()` writes them, where PHP may round them.
 * **Dates.** `getCertValidFrom()`, `getCertValidTo()` and the matching methods of `X509Cert` return dates in the format of the token timestamp, and take no format parameter.
 * **Messages** that name PHP types name JavaScript ones: `Its value must not be null or undefined.`, `Parameter must be an object.`.
 * **Not available:** `getPrettyXML()`, `getHTMLDump()` and `alterXML()`, display and test helpers of the PHP library.
+
+**With the PHP library 1.2.0**, three more cases differ, all defects of that version fixed in 1.2.1: upgrade it.
+
+* It accepts a token whose signature is ECDSA (signed with an EC key) while it declares an RSA signature algorithm, which this library refuses, at creation (`The signing key is not an RSA key: the signature algorithms are RSA ones!`) and at analysis (`Token hash signature verification failed!`).
+* With `base64Encode: false`, it reads `&` in a value as the start of an entity reference: `a&amp;b` is written `a&b`, and `a & b` is lost. This library writes every value as text.
+* It stops on a PHP error on a certificate whose validity dates are in 2050 or later, which this library reads. Anyone can send a token signed with such a certificate to a receiver that runs PHP 1.2.0.
 
 
 ## Documentation
@@ -458,7 +461,7 @@ npm test
 
 `npm test` builds the library into `dist/`, checks the types of the sources and of the tests, and runs the tests with the test runner of Node.js. The tests take the cases of the tests of the PHP library, and compare each analysis of a token, sound or forged, with the analysis of the PHP library.
 
-The PHP library, version 1.2.0, runs in the official `php:8.3-cli` and `php:7.4-cli` Docker images, through `bin/php-ezxmldsig` (see its header). The first run clones it into `test/.cache/` and installs its dependencies with Composer, in Docker. The tokens forged for the tests are altered, encrypted and signed again by the PHP library, not by the code under test. Without Docker, these tests are skipped, and the test runner says why; in continuous integration (`CI=true`), they fail instead.
+The PHP library, version 1.2.1, runs in the official `php:8.3-cli` and `php:7.4-cli` Docker images, through `bin/php-ezxmldsig` (see its header). The first run clones it into `test/.cache/` and installs its dependencies with Composer, in Docker. The tokens forged for the tests are altered, encrypted and signed again by the PHP library, not by the code under test. The tests also check that the PHP library emits no PHP message (warning, notice, deprecation) while it creates or analyzes a token. Without Docker, these tests are skipped, and the test runner says why; in continuous integration (`CI=true`), they fail instead.
 
 The certificates of `test/fixtures/certs/` and `test/fixtures/demo-certs/` are those of the PHP library; those of `test/fixtures/trust/`, one per case of the trust in a certificate, are generated by `bin/gen-test-certs`, in Docker. **Their private keys are public**: use them for the tests only (see the README of each directory).
 

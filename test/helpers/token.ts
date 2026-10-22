@@ -147,9 +147,21 @@ export function summarize(token: XMLDSigToken, ttl = 60): PhpResult {
   };
 }
 
+/** What the accessors of a token return, `isOutOfDate()` evaluated at the
+given time (in seconds since the UNIX epoch). */
+function summarizeAt(token: XMLDSigToken, ttl: number | undefined, now: number): PhpResult {
+  const realNow = Date.now;
+  Date.now = () => now * 1000;
+  try {
+    return summarize(token, ttl);
+  } finally {
+    Date.now = realNow;
+  }
+}
+
 /** The analyses made by the tests, compared with the PHP library at the end
 of each test file (see `compareWithPhp()`). */
-const analyses: Array<{ name: string; analysis: Analysis; ours: PhpResult }> = [];
+const analyses: Array<{ name: string; analysis: Analysis; token: XMLDSigToken }> = [];
 
 /**
  * Analyzes a token with this library, and records the analysis to compare
@@ -159,7 +171,7 @@ export function analyze(name: string, analysis: Analysis): XMLDSigToken {
   const token = analysis.cryptKey === undefined
     ? XMLDSigToken.analyzeXMLToken(analysis.xml, analysis.options ?? {})
     : XMLDSigToken.analyzeSecureXMLToken(analysis.xml, analysis.cryptKey, analysis.cryptKeyPassword ?? null, analysis.options ?? {});
-  analyses.push({ name, analysis, ours: summarize(token, analysis.ttl) });
+  analyses.push({ name, analysis, token });
   return token;
 }
 
@@ -196,8 +208,14 @@ export function compareWithPhp(test: (name: string, options: { skip: string | fa
       ...(analysis.ttl === undefined ? {} : { ttl: analysis.ttl }),
     })));
     assert.ok(analyses.length > 0, 'No analysis was recorded.');
-    analyses.forEach(({ name, ours }, index) => {
+    analyses.forEach(({ name, analysis, token }, index) => {
       const php = { ...(results[index] as PhpResult) };
+      // isOutOfDate() depends on the current time: it is evaluated here at
+      // the very second the PHP library evaluated it.
+      const ours = summarizeAt(token, analysis.ttl, php['now'] as number);
+      delete php['now'];
+      assert.deepEqual(php['phpMessages'], [], `${name}: the PHP library emitted messages`);
+      delete php['phpMessages'];
       delete php['xml'];
       const mine = { ...ours };
       for (const key of Object.hasOwn(except, name) ? except[name] as string[] : []) {

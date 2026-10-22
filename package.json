@@ -1,6 +1,6 @@
 {
   "name": "@webcoder31/ezxmldsig",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Signed and encrypted XML tokens (XML Digital Signature, XML Encryption) for Node.js, interoperable with the PHP library ezxmldsig",
   "license": "CECILL-C",
   "author": "Thierry Thiers <webcoder31@gmail.com>",

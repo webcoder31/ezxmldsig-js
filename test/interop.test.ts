@@ -1,7 +1,7 @@
 /**
  * Interoperability, both ways:
  *
- * - with the PHP library ezxmldsig 1.2.0, under PHP 7.4 and 8.3: the
+ * - with the PHP library ezxmldsig 1.2.1, under PHP 7.4 and 8.3: the
  *   tokens it creates are analyzed here, and the tokens created here are
  *   analyzed by it, signed and encrypted, with and without audience and
  *   expiry, with several algorithms;
@@ -60,19 +60,6 @@ const VARIANTS: Variant[] = [
   { name: 'encrypted, Triple DES, no prefix', encrypted: true, options: { sessionKeyCipheringAlgorithm: XMLDSigToken.TRIPLEDES_CBC, xmldsigNsPrefix: '' }, analysis: { sessionKeyCipheringAlgorithm: XMLDSigToken.TRIPLEDES_CBC } },
 ];
 
-/**
- * The data as read back. Without base64, the PHP library 1.2.0 writes a
- * value holding "&" as an entity reference, and loses it (EZXML-28): the
- * tokens it creates so lack the value "city".
- */
-function expectedData(variant: Variant, creator: 'php' | 'here') {
-  if (creator === 'php' && variant.options?.base64Encode === false) {
-    const { city: _lost, ...data } = DATA;
-    return data;
-  }
-  return DATA;
-}
-
 function analysisOptions(variant: Variant): TokenOptions {
   return trustAnchor(variant.analysis ?? {});
 }
@@ -120,7 +107,7 @@ for (const version of PHP_VERSIONS) {
         assert.equal(token.getError(), null, variant.name);
         assert.equal(token.isSignatureValid(), true, variant.name);
         assert.equal(token.isDataEncrypted(), variant.encrypted === true, variant.name);
-        assert.deepEqual(token.getData(), expectedData(variant, 'php'), variant.name);
+        assert.deepEqual(token.getData(), DATA, variant.name);
         assert.equal(token.isOutOfDate(), false, variant.name);
         if (php['tokenId'] !== null) {
           // The PHP library read its own token (not encrypted, or encrypted
@@ -147,7 +134,7 @@ for (const version of PHP_VERSIONS) {
         assert.equal(php['error'], null, variant.name);
         assert.equal(php['isSignatureValid'], true, variant.name);
         assert.equal(php['isDataEncrypted'], variant.encrypted === true, variant.name);
-        assert.deepEqual(php['data'], expectedData(variant, 'here'), variant.name);
+        assert.deepEqual(php['data'], DATA, variant.name);
         assert.equal(php['isOutOfDate'], false, variant.name);
         assert.match(php['tokenId'] as string, /^[0-9a-f]{32}$/, variant.name);
         const ours = analyze(variant, tokens[index]?.getXML() as string);

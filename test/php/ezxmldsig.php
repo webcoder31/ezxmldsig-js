@@ -49,7 +49,12 @@
  * - "constants": the constants of XMLDSigToken (no field). Result: an
  *   object of their names and values.
  *
- * Token data that are not UTF-8 text are given as {"bytes": base64}.
+ * "now" is the time (UNIX time, in seconds) at which isOutOfDate() was
+ * evaluated, so that a comparison can evaluate it at the same time.
+ * Token data that are not UTF-8 text are given as {"bytes": base64}. The
+ * results of "create", "analyze" and "cert" hold "phpMessages": the
+ * warnings, notices and deprecations PHP emitted while running the request
+ * (none is expected).
  *
  * The algorithm options are given by their URIs, the values of the
  * constants of XMLDSigToken. The result of an analysis holds what the
@@ -114,6 +119,7 @@ function describe(XMLDSigToken $token, $ttl)
         'isSignatureValueOk' => $token->isSignatureValueOk(),
         'isCertTrusted'    => $token->isCertTrusted(),
         'isDataEncrypted'  => $token->isDataEncrypted(),
+        'now'              => time(),
         'isOutOfDate'      => $token->isOutOfDate($ttl),
         'error'            => $token->getError(),
         'anomalies'        => $token->getAnomalies(),
@@ -184,6 +190,7 @@ function run(array $request)
                 'isOutOfDate' => $cert->isOutOfDate(),
                 'canSign'     => $cert->canSign(),
                 'der'         => base64_encode(X509Cert::pemToDer(file_get_contents($request['cert']))),
+                'pem'         => X509Cert::derToPem(X509Cert::pemToDer(file_get_contents($request['cert']))),
                 'trustedBy'   => array_map(function ($paths) use ($cert) {
                     return $cert->isTrustedBy($paths);
                 }, $request['trustedBy'] ?? []),
@@ -269,12 +276,31 @@ if (!is_array($requests))
     exit(1);
 }
 
+// The messages PHP emits while running a request, which the library
+// should not emit (see the header).
+$phpMessages = [];
+set_error_handler(function ($errno, $errstr, $errfile, $errline) use (&$phpMessages) {
+    // A message silenced by the operator @ is not emitted: PHP lowers
+    // error_reporting() while it runs.
+    if (0 !== (error_reporting() & $errno))
+    {
+        $phpMessages[] = $errstr . ' (' . basename($errfile) . ':' . $errline . ')';
+    }
+    return true;
+});
+
 $results = [];
 foreach ($requests as $request)
 {
+    $phpMessages = [];
     try
     {
-        $results[] = run($request);
+        $result = run($request);
+        if (in_array($request['command'] ?? null, ['create', 'analyze', 'cert'], true))
+        {
+            $result['phpMessages'] = $phpMessages;
+        }
+        $results[] = $result;
     }
     catch (Throwable $e)
     {

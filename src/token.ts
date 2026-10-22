@@ -632,7 +632,7 @@ export class XMLDSigToken {
       throw new Error('Failed loading private key to sign token data!');
     }
     if (privateKey.asymmetricKeyType !== 'rsa') {
-      throw new Error('The private key to sign token data is not an RSA key!');
+      throw new Error('The signing key is not an RSA key: the signature algorithms are RSA ones!');
     }
 
     doc = loadXML(document(digest, ''), 'XML Digital Signature');

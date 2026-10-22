@@ -237,7 +237,7 @@ issue twin-new-signer "$(subject 'Twin Time Signer Dept')" sign_no_akid "$WORK_D
 
 # A signing certificate with an EC key (P-256), signed by its own key, and
 # its key: a token it signs with ECDSA, under an RSA signature algorithm,
-# is refused (the PHP library 1.2.0 accepts it).
+# is refused, as by the PHP library from version 1.2.1.
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$WORK_DIR/ec-signer.key.pem" 2>/dev/null
 openssl req -new -x509 -sha256 -days "$DAYS" -key "$WORK_DIR/ec-signer.key.pem" \
     -subj "$(subject 'EC Signer Dept')" -set_serial "0x$(openssl rand -hex 16)" \

@@ -467,18 +467,31 @@ describe('signature verification result', () => {
   }
 });
 
-test('a token signed with ECDSA under an RSA signature algorithm is refused', () => {
-  // The PHP library 1.2.0 accepts it (EZXML-26): this case is not compared.
-  const [created] = runPhp([{ command: 'create', data: sampleData(), signKey: `${TRUST}/ec-signer.key.pem`, signCert: `${TRUST}/ec-signer.cert.pem` }]);
-  assert.equal(created?.['isSignatureValid'], true, 'The PHP library accepts it.');
-  const token = XMLDSigToken.analyzeXMLToken(created?.['xml'] as string, { signerCertPath: `${TRUST}/ec-signer.cert.pem` });
-  assert.equal(token.isDigestValueOk(), true);
-  assert.equal(token.isSignatureValueOk(), false);
-  assert.equal(token.getError(), '1 anomaly detected: Token hash signature verification failed!');
-  assert.equal(
-    XMLDSigToken.createXMLToken(sampleData(), `${TRUST}/ec-signer.key.pem`, `${TRUST}/ec-signer.cert.pem`).getError(),
-    'The private key to sign token data is not an RSA key!',
-  );
+describe('keys that are not RSA keys', () => {
+  test('a token signed with ECDSA under an RSA signature algorithm is refused', () => {
+    // Signed again by the PHP bridge with an EC key, under rsa-sha256: the
+    // signature is a valid ECDSA one.
+    const [xml] = forge([{ xml: createToken().getXML() as string, steps: [{ op: 'redigest' }, { op: 'resign', key: `${TRUST}/ec-signer.key.pem`, cert: `${TRUST}/ec-signer.cert.pem` }] }]);
+    const token = analyze('ECDSA under rsa-sha256', { xml: xml as string, options: { signerCertPath: `${TRUST}/ec-signer.cert.pem` } });
+    assert.equal(token.isDigestValueOk(), true);
+    assert.equal(token.isSignatureValueOk(), false);
+    assert.equal(token.getError(), '1 anomaly detected: Token hash signature verification failed!');
+  });
+
+  test('a signing key that is not an RSA key is refused at creation, as by the PHP library', () => {
+    const [php] = runPhp([{ command: 'create', data: sampleData(), signKey: `${TRUST}/ec-signer.key.pem`, signCert: `${TRUST}/ec-signer.cert.pem` }]);
+    const token = XMLDSigToken.createXMLToken(sampleData(), `${TRUST}/ec-signer.key.pem`, `${TRUST}/ec-signer.cert.pem`);
+    assert.equal(token.getError(), 'The signing key is not an RSA key: the signature algorithms are RSA ones!');
+    assert.equal(token.getError(), php?.['error']);
+    assert.equal(token.isSignatureValid(), php?.['isSignatureValid']);
+  });
+});
+
+test('a token signed with a certificate valid after 2049 is valid', () => {
+  const created = XMLDSigToken.createXMLToken(sampleData(), `${CERTS}/long.key.pem`, `${CERTS}/long.cert.pem`);
+  assertValid(created);
+  assert.equal(created.getCertValidTo(), '2060-01-01T00:00:00Z');
+  assertValid(analyze('certificate valid until 2060', { xml: created.getXML() as string, options: trustAnchor() }));
 });
 
 describe('token identifier', () => {

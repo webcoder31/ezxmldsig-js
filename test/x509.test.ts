@@ -43,6 +43,8 @@ const TRUST_CASES: Array<[string, string[], boolean, string]> = [
   [`${CERTS}/attacker.cert.pem`, ANCHOR, false, 'a certificate that copies the names of a legitimate one'],
   [`${CERTS}/intermediate.cert.pem`, [`${CERTS}/root.cert.pem`], true, 'the intermediate, issued by the root'],
   [`${CERTS}/root.cert.pem`, [`${CERTS}/root.cert.pem`], true, 'the trusted root itself'],
+  [`${CERTS}/long.cert.pem`, ANCHOR, true, 'valid until 2060: a date written as GeneralizedTime'],
+  [`${CERTS}/future.cert.pem`, ANCHOR, false, 'valid in 2099 only'],
   [`${TRUST}/issued.cert.pem`, ANCHOR, true, 'issued by the trusted intermediate'],
   [`${TRUST}/expired.cert.pem`, ANCHOR, false, 'expired'],
   [`${TRUST}/not-yet-valid.cert.pem`, ANCHOR, false, 'not valid yet'],
@@ -85,16 +87,6 @@ const CA_CASES: Array<[string, string, boolean]> = [
   [`${DEMO}/sign.cert.pem`, `${CERTS}/intermediate.cert.pem`, false],
   [`${TRUST}/forged.cert.pem`, `${CERTS}/intermediate.cert.pem`, false],
 ];
-
-/**
- * The certificates the PHP library fails to read, with the reason: they are
- * not compared.
- */
-const PHP_FAILURES: Record<string, RegExp> = {
-  // EZXML-24: X509Cert reads a date after 2049 (GeneralizedTime) as a
-  // two-digit year, and throws an Error.
-  [`${TRUST}/not-yet-valid.cert.pem`]: /^Call to a member function (format|getTimestamp)\(\) on false$/,
-};
 
 /** Every certificate of the fixtures. */
 const ALL_CERTS = [CERTS, DEMO, TRUST].flatMap((dir) =>
@@ -228,12 +220,9 @@ describe('the PHP library reads and decides the same', { skip: phpSkip }, () => 
     })));
 
     ALL_CERTS.forEach((path, index) => {
-      const php = results[index] as Record<string, unknown>;
-      const failure = PHP_FAILURES[path];
-      if (failure !== undefined) {
-        assert.match(String(php['exception']), failure, path);
-        return;
-      }
+      const php = { ...(results[index] as Record<string, unknown>) };
+      assert.deepEqual(php['phpMessages'], [], `${path}: the PHP library emitted messages`);
+      delete php['phpMessages'];
       const cert = load(path);
       assert.deepEqual({
         fingerprint: cert.getFingerprint(),
@@ -245,6 +234,7 @@ describe('the PHP library reads and decides the same', { skip: phpSkip }, () => 
         isOutOfDate: cert.isOutOfDate(),
         canSign: cert.canSign(),
         der: X509Cert.pemToDer(readFileSync(path, 'utf8'))?.toString('base64'),
+        pem: X509Cert.derToPem(X509Cert.pemToDer(readFileSync(path, 'utf8'))),
         trustedBy: TRUST_CASES.filter(([p]) => p === path).map(([, anchor]) => cert.isTrustedBy(anchor)),
         validCA: CA_CASES.filter(([p]) => p === path).map(([, ca]) => cert.isValidCA(readFileSync(ca, 'utf8'))),
       }, php, path);

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2
+
+Follows the PHP library ezxmldsig 1.2.1, which fixes the defects of 1.2.0 this library did not share: with 1.2.1 or later, both libraries give the same verdicts and error messages on every token.
+
+- A signing key that is not an RSA key is refused at creation with the message of the PHP library: `The signing key is not an RSA key: the signature algorithms are RSA ones!` (it was `The private key to sign token data is not an RSA key!`). Such a key is refused as before.
+- The README tells, in "Differences with the PHP library", which differences remain with 1.2.1 or later, and which ones concern 1.2.0 only.
+- The tests check the interoperability with the PHP library 1.2.1, and that it emits no PHP message while it creates or analyzes a token.
+
 ## 1.0.1
 
 No change to the library: its code is that of 1.0.0.
