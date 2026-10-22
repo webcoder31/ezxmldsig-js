@@ -17,6 +17,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      # The version published is that of package.json: a release whose tag
+      # is not v<that version> would publish another one than it names.
+      - name: The tag of the release is v<version of package.json>
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "The tag $GITHUB_REF_NAME is not $expected, the version of package.json: nothing is published." >&2
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
