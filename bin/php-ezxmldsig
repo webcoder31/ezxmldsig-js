@@ -45,18 +45,48 @@ if [ -n "${EZXMLDSIG_PHP_DIR:-}" ]; then
         exit 1
     fi
 else
+    # The test runner of Node.js runs the test files in parallel: several
+    # runs of this script may find the PHP library missing at once. The first
+    # one prepares it, under a lock (a directory, whose creation is atomic),
+    # while the others wait for it. It is prepared in a directory of its own,
+    # then moved into place: a copy is either complete or absent, never half
+    # cloned or half installed.
     PHP_DIR="$ROOT_DIR/test/.cache/ezxmldsig-php"
-    if [ ! -f "$PHP_DIR/src/XMLDSigToken.php" ]; then
-        echo "Cloning ezxmldsig $PHP_TAG into test/.cache/ezxmldsig-php." >&2
-        rm -rf "$PHP_DIR"
+    LOCK="$PHP_DIR.lock"
+    WORK_DIR="$PHP_DIR.tmp"
+    ready() { [ -f "$PHP_DIR/vendor/autoload.php" ]; }
+
+    if ! ready; then
         mkdir -p "$ROOT_DIR/test/.cache"
-        git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$PHP_TAG" "$PHP_REPO" "$PHP_DIR"
-    fi
-    if [ ! -f "$PHP_DIR/vendor/autoload.php" ]; then
-        echo "Installing the dependencies of ezxmldsig (composer:2 image)." >&2
-        docker run --rm -u "$DOCKER_USER" -e COMPOSER_HOME=/tmp/composer \
-            -v "$PHP_DIR:/app" -w /app composer:2 \
-            update --no-interaction --no-progress --no-dev --ignore-platform-reqs >&2
+        LOCKED=0
+        WAITED=0
+        while ! ready; do
+            if mkdir "$LOCK" 2>/dev/null; then
+                LOCKED=1
+                break
+            fi
+            if [ "$WAITED" -ge 600 ]; then
+                echo "The PHP library is still not prepared after 600 s: if no run is preparing it, remove $LOCK." >&2
+                exit 1
+            fi
+            sleep 1
+            WAITED=$((WAITED + 1))
+        done
+        if [ "$LOCKED" = 1 ]; then
+            trap 'rm -rf "$WORK_DIR"; rmdir "$LOCK"' EXIT
+            if ! ready; then
+                echo "Cloning ezxmldsig $PHP_TAG into test/.cache/ezxmldsig-php." >&2
+                rm -rf "$WORK_DIR" "$PHP_DIR"
+                git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$PHP_TAG" "$PHP_REPO" "$WORK_DIR" >&2
+                echo "Installing the dependencies of ezxmldsig (composer:2 image)." >&2
+                docker run --rm -u "$DOCKER_USER" -e COMPOSER_HOME=/tmp/composer \
+                    -v "$WORK_DIR:/app" -w /app composer:2 \
+                    update --no-interaction --no-progress --no-dev --ignore-platform-reqs >&2
+                mv "$WORK_DIR" "$PHP_DIR"
+            fi
+            rmdir "$LOCK"
+            trap - EXIT
+        fi
     fi
 fi
 
