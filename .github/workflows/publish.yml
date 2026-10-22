@@ -1,7 +1,10 @@
-# Publishes the package on npm when a release is published on GitHub, with
-# provenance: npm links the package to this workflow and to the commit it
-# was built from. The tests run first. Requires the secret NPM_TOKEN (an
-# npm automation token of the account webcoder31), and a public repository.
+# Publishes the package on npm when a release is published on GitHub. The
+# tests run first. npm trusts this workflow (trusted publishing, set up in
+# the settings of the package on npmjs.com for webcoder31/ezxmldsig-js and
+# publish.yml): it proves its identity with an OpenID Connect token of
+# GitHub (permission id-token), without any npm token, and npm adds the
+# provenance of the package (this workflow, the commit it was built from).
+# Requires npm 11.5.1 or later, and a public repository.
 name: Publish
 
 on:
@@ -32,6 +35,4 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm test
-      - run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public

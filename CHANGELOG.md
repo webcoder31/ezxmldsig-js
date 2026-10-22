@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+No change to the library: its code is that of 1.0.0.
+
+- The package is published by the workflow of the repository through npm trusted publishing (OpenID Connect), without an npm token. Its provenance still names the workflow and the commit it was built from.
+- The README describes how a version is released (section "Releasing a version").
+
 ## 1.0.0
 
 First version: the Node.js counterpart of the PHP library ezxmldsig 1.2.0, which creates and verifies the same XML tokens.
