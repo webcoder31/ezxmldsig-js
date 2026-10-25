@@ -11,7 +11,7 @@
 import { X509Certificate, createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify, type KeyObject } from 'node:crypto';
 import { inspect } from 'node:util';
 
-import type { Document, Element, Node } from '@xmldom/xmldom';
+import { XMLSerializer, type Document, type Element, type Node } from '@xmldom/xmldom';
 import xpath from 'xpath';
 
 import * as alg from './algorithms.js';
@@ -107,6 +107,91 @@ function nodes(expression: string, context: Node): Node[] {
 /** The string value of an XPath expression. */
 function evaluate(expression: string, context: Node): string {
   return select(`string(${expression})`, context as never) as unknown as string;
+}
+
+/** The values `getPrettyXML()` splits into lines, the first node of each. */
+const PRETTY_SPLIT_VALUES = [
+  '//ds:Signature/ds:SignatureValue',
+  '//ds:Signature/ds:KeyInfo/ds:X509Data/ds:X509Certificate',
+  '//ds:Signature/ds:Object/xenc:EncryptedData/ds:KeyInfo/xenc:EncryptedKey/xenc:CipherData/xenc:CipherValue',
+  '//ds:Signature/ds:Object/xenc:EncryptedData/xenc:CipherData/xenc:CipherValue',
+];
+
+/** The indentation step of `getPrettyXML()`. */
+const PRETTY_INDENT = 2;
+
+/**
+ * Splits the value of the node an XPath expression selects into lines of
+ * 64 characters, as `getPrettyXML()` of the PHP library does: the document
+ * is loaded as a token is, the value replaced, and the document serialized
+ * again as libxml does (`serializeAsLibxml()`). A document that cannot be
+ * loaded, or has no such node, is returned unchanged; so is one whose value
+ * is empty or "0", which PHP takes as false, except that the PHP library
+ * then removes "&#xD;" from it all the same.
+ */
+function splitNodeValue(xml: string, expression: string): string {
+  let doc: Document;
+  try {
+    doc = loadXML(xml, 'XML content');
+  } catch {
+    return xml;
+  }
+  const node = nodes(expression, doc)[0];
+  if (node === undefined) {
+    return xml;
+  }
+  const value = node.textContent ?? '';
+  if (value !== '' && value !== '0') {
+    node.textContent = '\n' + (value.match(/[\s\S]{1,64}/g) as string[]).join('\n') + '\n';
+    xml = serializeAsLibxml(doc);
+  }
+  return xml.split('&#xD;').join('');
+}
+
+/**
+ * Serializes a document as `saveXML()` of PHP (libxml) does: the XML
+ * declaration, with the version, encoding and standalone of the document,
+ * then each node of the document (the root element, and comments or
+ * processing instructions around it) on a line of its own; the whitespace
+ * between them is not kept. libxml writes the namespace declarations of an
+ * element before its other attributes: they are moved so here, the
+ * document being thrown away after.
+ */
+function serializeAsLibxml(doc: Document): string {
+  const elements = nodes('//*', doc) as Element[];
+  for (const element of elements) {
+    const attributes = Array.from(element.attributes);
+    const isDeclaration = (name: string) => name === 'xmlns' || name.startsWith('xmlns:');
+    const firstDeclaration = attributes.findIndex((attribute) => isDeclaration(attribute.name));
+    if (firstDeclaration > 0 && attributes.slice(0, firstDeclaration).some((attribute) => !isDeclaration(attribute.name))) {
+      for (const attribute of attributes.filter((candidate) => !isDeclaration(candidate.name))) {
+        element.removeAttributeNode(attribute);
+        element.setAttributeNode(attribute);
+      }
+    }
+  }
+  const serializer = new XMLSerializer();
+  let declaration = '<?xml version="1.0"?>\n';
+  let body = '';
+  for (let child = doc.firstChild; child !== null; child = child.nextSibling) {
+    if (child.nodeType === child.PROCESSING_INSTRUCTION_NODE && child.nodeName === 'xml') {
+      const data = child.nodeValue ?? '';
+      const attribute = (name: string) => new RegExp(`${name}\\s*=\\s*(["'])([^"']*)\\1`).exec(data)?.[2];
+      const version = attribute('version') ?? '1.0';
+      const encoding = attribute('encoding');
+      const standalone = attribute('standalone');
+      declaration = `<?xml version="${version}"${encoding === undefined ? '' : ` encoding="${encoding}"`}`
+        + `${standalone === undefined ? '' : ` standalone="${standalone}"`}?>\n`;
+    } else if (child.nodeType !== child.TEXT_NODE) {
+      body += serializer.serializeToString(child) + '\n';
+    }
+  }
+  // Without a declared encoding, libxml writes ASCII: every other character
+  // as a character reference.
+  if (!declaration.includes(' encoding=')) {
+    body = body.replace(/[^\x00-\x7F]/gu, (char) => `&#x${(char.codePointAt(0) as number).toString(16).toUpperCase()};`);
+  }
+  return declaration + body;
 }
 
 /** The empty() of PHP on a string: "" and "0" are empty. */
@@ -1222,6 +1307,54 @@ export class XMLDSigToken {
   /** Gets the XML token. */
   getXML(): string | null {
     return this.#xml;
+  }
+
+  /**
+   * Gets the XML token in a readable form, for display only: use
+   * `getXML()` to get the token to work with. The signature value, the
+   * certificate and the encrypted values are split into lines of 64
+   * characters, and the elements are indented by 2 spaces. The result is
+   * the one of `getPrettyXML()` of the PHP library, whose steps it follows.
+   * A token that is not an XML document is returned as it is, one line per
+   * line.
+   */
+  getPrettyXML(): string | null {
+    if (this.#xml === null) {
+      return null;
+    }
+    let xml = this.#xml;
+    // The PHP library selects the values with the prefix of the option
+    // xmldsigNsPrefix in place of "ds:": with no prefix, its expressions
+    // select elements in no namespace, and no value is split.
+    if (this.#xmldsigNsPrefix !== '') {
+      for (const expression of PRETTY_SPLIT_VALUES) {
+        xml = splitNodeValue(xml, expression);
+      }
+    }
+
+    // One tag per line, then each line indented by the depth of the
+    // elements: a line that opens an element indents the following ones, a
+    // line that closes one is outdented, and a line that opens and closes
+    // an element changes nothing. A closing line keeps the indentation step
+    // of the line before it, as in the PHP library.
+    xml = xml.replace(/(>)[ \t\n\x0B\f\r]*(<)(\/*)/g, '$1\n$2$3');
+    let formatted = '';
+    let pad = 0;
+    let indent = 0;
+    for (const line of xml.split('\n').filter((part) => part !== '')) {
+      if (/[^\n]+<\/\w[^>]*>$/.test(line)) {
+        indent = 0;
+      } else if (/^<\/\w/.test(line)) {
+        pad -= PRETTY_INDENT;
+      } else if (/^<\w[^>]*[^/]>[^\n]*$/.test(line)) {
+        indent = PRETTY_INDENT;
+      } else {
+        indent = 0;
+      }
+      formatted += ' '.repeat(Math.max(pad, 0)) + line + '\n';
+      pad += indent;
+    }
+    return formatted;
   }
 
   /**

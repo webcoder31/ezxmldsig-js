@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `getPrettyXML()` gives the token in a readable form, for display: the signature value, the certificate and the encrypted values split into lines of 64 characters, and the elements indented. Its result is the one of the PHP library, which the tests check on every token they compare with it.
 - The concepts common to the Node.js and PHP libraries move to the documentation site, https://webcoder31.github.io/ezxmldsig-doc/: why they exist, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability. The README keeps what is particular to the Node.js library, a summary of each moved section and the warnings a receiver needs: the trust anchor restricted to the sender, freshness and replay left to the receiver, revocation not checked. It no longer sends to the README of the PHP library.
 - The PHP library is linked under the new name of its repository, ezxmldsig-php.
 

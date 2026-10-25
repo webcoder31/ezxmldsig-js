@@ -114,6 +114,7 @@ function describe(XMLDSigToken $token, $ttl)
 {
     return [
         'xml'              => $token->getXML(),
+        'prettyXml'        => $token->getPrettyXML(),
         'isSignatureValid' => $token->isSignatureValid(),
         'isDigestValueOk'  => $token->isDigestValueOk(),
         'isSignatureValueOk' => $token->isSignatureValueOk(),

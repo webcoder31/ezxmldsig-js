@@ -144,6 +144,7 @@ export function summarize(token: XMLDSigToken, ttl = 60): PhpResult {
     certIssuer: token.getCertIssuer(),
     certValidFrom: token.getCertValidFrom(),
     certValidTo: token.getCertValidTo(),
+    prettyXml: token.getPrettyXML(),
   };
 }
 

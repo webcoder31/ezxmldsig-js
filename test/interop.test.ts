@@ -109,6 +109,11 @@ for (const version of PHP_VERSIONS) {
         assert.equal(token.isDataEncrypted(), variant.encrypted === true, variant.name);
         assert.deepEqual(token.getData(), DATA, variant.name);
         assert.equal(token.isOutOfDate(), false, variant.name);
+        // Its readable form is the one given here, but with no prefix, where
+        // the PHP library splits no value (see getPrettyXML()).
+        if (variant.options?.xmldsigNsPrefix !== '') {
+          assert.equal(token.getPrettyXML(), php['prettyXml'], variant.name);
+        }
         if (php['tokenId'] !== null) {
           // The PHP library read its own token (not encrypted, or encrypted
           // with the recipient key): the same values are read here.
@@ -141,6 +146,7 @@ for (const version of PHP_VERSIONS) {
         assert.equal(php['tokenId'], ours.getTokenId(), variant.name);
         assert.deepEqual(php['audience'], ours.getAudience(), variant.name);
         assert.equal(php['expiry'], ours.getExpiry(), variant.name);
+        assert.equal(php['prettyXml'], ours.getPrettyXML(), variant.name);
       });
     });
 

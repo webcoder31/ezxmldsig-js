@@ -59,7 +59,7 @@ npm install @webcoder31/ezxmldsig
 3. It encrypts and decrypts the token data, so that only the recipient can read them, even when the token travels over an unencrypted connection: AES-256-GCM for the data and RSA-OAEP for the session key by default. Only the token data are encrypted: this protects neither the rest of the request nor the response, does not authenticate the server, and does not prevent an intercepted token from being submitted again (see [Replay](#replay)).
 4. It guarantees the integrity and the origin of the data by verifying that the signature has the structure of a token, that its algorithms are the expected ones, that the token has not been altered, and that the X.509 certificate of the token is trusted (see [Trust anchor](#trust-anchor)).
 5. Each token holds a signed timestamp and a signed random identifier, so that the receiver can refuse a token that is too old or already accepted (see [Replay](#replay)). These two checks are up to the receiver: `isSignatureValid()` makes neither.
-6. It gives access to the information of the certificate of the token: subject, issuer, validity dates.
+6. It gives access to the information of the certificate of the token: subject, issuer, validity dates. `getPrettyXML()` gives the token in a readable form, for display, as the PHP library gives it.
 7. It refuses, before parsing them, the XML documents that have a document type declaration (see [XML parsing](#xml-parsing)).
 
 **`X509Cert`** reads an X.509 certificate (subject, issuer, Distinguished Name, validity dates, fingerprint) and makes the checks the analysis needs: its key usage (`canSign()`), its chain up to trusted CA certificates (`isTrustedBy()`), whether a given CA certificate issued it (`isValidCA()`).
@@ -374,7 +374,7 @@ With the PHP library 1.2.1 or later, the tokens are the same, and so are the ver
 * **Values of the data** are read back as strings, or as a `Buffer` when they are not UTF-8 text, where PHP gives strings of bytes; numbers are written as `String()` writes them, where PHP may round them.
 * **Dates.** `getCertValidFrom()`, `getCertValidTo()` and the matching methods of `X509Cert` return dates in the format of the token timestamp, and take no format parameter.
 * **Messages** that name PHP types name JavaScript ones: `Its value must not be null or undefined.`, `Parameter must be an object.`.
-* **Not available:** `getPrettyXML()`, `getHTMLDump()` and `alterXML()`, display and test helpers of the PHP library.
+* **Not available:** `getHTMLDump()` and `alterXML()`, display and test helpers of the PHP library.
 
 **With the PHP library 1.2.0**, three more cases differ, all defects of that version fixed in 1.2.1: upgrade it.
 

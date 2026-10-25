@@ -988,4 +988,30 @@ describe('key information', () => {
   });
 });
 
+/* getPrettyXML() is also compared with the PHP library on every analysis
+(compareWithPhp()) and on the tokens of both libraries (interop.test.ts). */
+describe('readable form', () => {
+  test('the long values are split into lines of 64 characters, and the elements indented', () => {
+    const token = createToken();
+    const xml = token.getXML() as string;
+    const pretty = token.getPrettyXML() as string;
+    const signatureValue = node(loadXML(xml, 'token'), '/ds:Signature/ds:SignatureValue').textContent as string;
+    assert.ok(signatureValue.length > 64);
+    assert.ok(pretty.split('\n').includes(`    ${signatureValue.slice(0, 64)}`));
+    assert.ok(pretty.split('\n').includes('  <ds:Object Id="Token">'));
+    assert.ok(pretty.split('\n').includes('    <Token>'));
+    assert.equal(token.getXML(), xml, 'the token is left as it is');
+  });
+
+  test('a document that is not XML is returned as it is', () => {
+    const token = XMLDSigToken.analyzeXMLToken('not an XML document', trustAnchor());
+    assert.equal(token.getPrettyXML(), 'not an XML document\n');
+  });
+
+  test('with no prefix, no value is split, as with the PHP library', () => {
+    const token = createToken(sampleData(), { xmldsigNsPrefix: '' });
+    assert.equal((token.getPrettyXML() as string).split('\n').some((line) => /^ *[A-Za-z0-9+/=]{64}$/.test(line)), false);
+  });
+});
+
 compareWithPhp(test);
