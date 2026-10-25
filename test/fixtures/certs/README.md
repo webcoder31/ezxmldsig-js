@@ -4,7 +4,7 @@
 
 Use these files for the tests only. Never use them, nor trust these CA certificates, in an application, a test environment reachable by others, or a production system: generate your own keys and certificates, and keep the private keys out of any repository.
 
-The files are copied from `tests/fixtures/certs/` of the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig), version 1.2.1, which generates them with `bin/gen-test-certs`. Every certificate is valid for 10 years from its generation, but `long` and `future`, which have fixed dates: copy them again from there when they expire.
+The files are copied from `tests/fixtures/certs/` of the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig-php), version 1.2.1, which generates them with `bin/gen-test-certs`. Every certificate is valid for 10 years from its generation, but `long` and `future`, which have fixed dates: copy them again from there when they expire.
 
 | File | Content |
 |---|---|

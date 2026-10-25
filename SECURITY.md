@@ -12,7 +12,7 @@ Describe in the report:
 * what an attacker can do, and under which conditions (what they must be able to submit or observe);
 * the steps or the code that reproduce it, with a token if possible. Never send a private key you use outside a test.
 
-A vulnerability that the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig) shares (the tokens and their checks are the same) can be reported on either repository.
+A vulnerability that the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig-php) shares (the tokens and their checks are the same) can be reported on either repository.
 
 ## Supported versions
 
