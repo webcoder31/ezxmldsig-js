@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The concepts common to the Node.js and PHP libraries move to the documentation site, https://webcoder31.github.io/ezxmldsig-doc/: why they exist, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability. The README keeps what is particular to the Node.js library, a summary of each moved section and the warnings a receiver needs: the trust anchor restricted to the sender, freshness and replay left to the receiver, revocation not checked. It no longer sends to the README of the PHP library.
+- The PHP library is linked under the new name of its repository, ezxmldsig-php.
+
 ## 1.0.2
 
 Follows the PHP library ezxmldsig 1.2.1, which fixes the defects of 1.2.0 this library did not share: with 1.2.1 or later, both libraries give the same verdicts and error messages on every token.
