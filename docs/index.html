@@ -9,10 +9,13 @@
 <div class="tsd-page-title">
 <h1>ezxmldsig for Node.js - v1.0.3</h1></div>
 <div class="tsd-panel tsd-typography"><h1 id="ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens" class="tsd-anchor-link">ezxmldsig for Node.js: signed and encrypted XML tokens<a href="#ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<blockquote>
+<p><strong>Documentation: <a href="https://webcoder31.github.io/ezxmldsig-doc/">webcoder31.github.io/ezxmldsig-doc</a></strong></p>
+<p>Why ezxmldsig exists, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability: the concepts common to the Node.js and PHP libraries are explained there. This README covers what is particular to the Node.js library.</p>
+</blockquote>
 <p>The library <strong>ezxmldsig</strong> creates and verifies XML tokens: enveloping XML digital signatures that carry timestamped user data, optionally encrypted. Use them for token based authentication, single sign-on, or to transmit data whose integrity and origin, and confidentiality when they are encrypted, are protected by the token itself.</p>
 <p>It is the Node.js counterpart of the PHP library <a href="https://github.com/webcoder31/ezxmldsig-php">ezxmldsig</a>, version 1.2.1: both create and verify <strong>the same tokens</strong>, so that a single sign-on can mix PHP and Node.js nodes. A token created by one is valid for the other, which reads the same data, and both refuse the same forged tokens with the same errors. The class, its methods, its options and its error messages are those of the PHP library, adapted to JavaScript; the differences are listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</p>
 <p>The library signs its own tokens only. It does not sign existing XML documents in place, parts of them, or external files: for these, use <a href="https://www.npmjs.com/package/xml-crypto">xml-crypto</a> directly, or a format designed for document signatures.</p>
-<p>The concepts common to both libraries are explained on the <strong>documentation site</strong>, <a href="https://webcoder31.github.io/ezxmldsig-doc/:">https://webcoder31.github.io/ezxmldsig-doc/:</a> why they exist, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability. This README keeps what is particular to the Node.js library.</p>
 <p>The author of the <strong>ezxmldsig</strong> library is Thierry Thiers.</p>
 <h2 id="contents" class="tsd-anchor-link">Contents<a href="#contents" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
@@ -35,6 +38,7 @@
 <li><a href="#options">Options</a></li>
 </ul>
 </li>
+<li><a href="#demos">Demos</a></li>
 <li><a href="#differences-with-the-php-library">Differences with the PHP library</a></li>
 <li><a href="#documentation">Documentation</a></li>
 <li><a href="#development">Development</a></li>
@@ -297,6 +301,12 @@
 <pre><code class="js"><span class="hl-7">// Create a token signed with RSA-SHA512 and an SHA-512 digest...</span><br/><span class="hl-5">const</span><span class="hl-1"> </span><span class="hl-6">token</span><span class="hl-1"> = </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-0">createXMLToken</span><span class="hl-1">(</span><span class="hl-4">data</span><span class="hl-1">, </span><span class="hl-4">signKey</span><span class="hl-1">, </span><span class="hl-4">signCert</span><span class="hl-1">, </span><span class="hl-4">signKeyPassword</span><span class="hl-1">, {</span><br/><span class="hl-1">  </span><span class="hl-4">signatureAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">RSA_SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">  </span><span class="hl-4">digestAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">});</span><br/><br/><span class="hl-7">// ...and analyze it, expecting these algorithms.</span><br/><span class="hl-5">const</span><span class="hl-1"> </span><span class="hl-6">analyzed</span><span class="hl-1"> = </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-0">analyzeXMLToken</span><span class="hl-1">(</span><span class="hl-4">xml</span><span class="hl-1">, {</span><br/><span class="hl-1">  </span><span class="hl-4">caCertPath:</span><span class="hl-1"> [</span><span class="hl-2">&#39;path/to/ca/intermediate/certificate.pem&#39;</span><span class="hl-1">, </span><span class="hl-2">&#39;path/to/ca/root/certificate.pem&#39;</span><span class="hl-1">],</span><br/><span class="hl-1">  </span><span class="hl-4">signatureAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">RSA_SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">  </span><span class="hl-4">digestAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">});</span>
 </code><button type="button">Copy</button></pre>
 
+<h2 id="demos" class="tsd-anchor-link">Demos<a href="#demos" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Two demos show the tokens at work, online, with nothing to install. They run the PHP library, whose tokens this library creates and verifies the same way (see <a href="#interoperability">Interoperability</a>); its README tells how to run them on your machine (<a href="https://github.com/webcoder31/ezxmldsig-php#demo">demo</a>, <a href="https://github.com/webcoder31/ezxmldsig-php#single-sign-on-demo">single sign-on demo</a>).</p>
+<p>**The token lab, <a href="https://ezxmldsig.wbcdr.dev/**:">https://ezxmldsig.wbcdr.dev/**:</a> create a token, read each block of its signature, follow the checks of the receiver one by one, and replay the attacks the library refuses.</p>
+<p><img src="https://webcoder31.github.io/ezxmldsig-doc/assets/screenshots/token-lab.png" alt="The token lab: its animated illustration of a token verified and accepted, the issuer, and the annotated token with the block SignedInfo selected"></p>
+<p>**The single sign-on demo, <a href="https://sso.wbcdr.dev/**:">https://sso.wbcdr.dev/**:</a> three sites on three host names, an identity provider, which alone knows the passwords, and two applications that open on the tokens it signs, one login for both. A trace shows each hop, each token and each check.</p>
+<p><img src="https://webcoder31.github.io/ezxmldsig-doc/assets/screenshots/single-sign-on.png" alt="The single sign-on demo: its home page, with its animated illustration of the flow, and the trace of a login on MAIL then of CRM entered without a new login"></p>
 <h2 id="differences-with-the-php-library" class="tsd-anchor-link">Differences with the PHP library<a href="#differences-with-the-php-library" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>With the PHP library 1.2.1 or later, the tokens are the same, and so are the verdicts on them and the error messages, but in these cases:</p>
 <ul>
@@ -371,6 +381,7 @@
 <li><a href="#interoperability"><span>Interoperability</span></a></li>
 <li><a href="#certificates-and-keys"><span>Certificates and keys</span></a></li>
 <li><a href="#options"><span>Options</span></a></li></ul></li>
+<li><a href="#demos"><span>Demos</span></a></li>
 <li><a href="#differences-with-the-php-library"><span>Differences with the <wbr/>PHP library</span></a></li>
 <li><a href="#documentation"><span>Documentation</span></a></li>
 <li><a href="#development"><span>Development</span></a></li>

@@ -1,12 +1,14 @@
 # ezxmldsig for Node.js: signed and encrypted XML tokens
 
+> **Documentation: [webcoder31.github.io/ezxmldsig-doc](https://webcoder31.github.io/ezxmldsig-doc/)**
+>
+> Why ezxmldsig exists, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability: the concepts common to the Node.js and PHP libraries are explained there. This README covers what is particular to the Node.js library.
+
 The library **ezxmldsig** creates and verifies XML tokens: enveloping XML digital signatures that carry timestamped user data, optionally encrypted. Use them for token based authentication, single sign-on, or to transmit data whose integrity and origin, and confidentiality when they are encrypted, are protected by the token itself.
 
 It is the Node.js counterpart of the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig-php), version 1.2.1: both create and verify **the same tokens**, so that a single sign-on can mix PHP and Node.js nodes. A token created by one is valid for the other, which reads the same data, and both refuse the same forged tokens with the same errors. The class, its methods, its options and its error messages are those of the PHP library, adapted to JavaScript; the differences are listed in [Differences with the PHP library](#differences-with-the-php-library).
 
 The library signs its own tokens only. It does not sign existing XML documents in place, parts of them, or external files: for these, use [xml-crypto](https://www.npmjs.com/package/xml-crypto) directly, or a format designed for document signatures.
-
-The concepts common to both libraries are explained on the **documentation site**, https://webcoder31.github.io/ezxmldsig-doc/: why they exist, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability. This README keeps what is particular to the Node.js library.
 
 The author of the **ezxmldsig** library is Thierry Thiers.
 
@@ -29,6 +31,7 @@ The author of the **ezxmldsig** library is Thierry Thiers.
     * [Interoperability](#interoperability)
     * [Certificates and keys](#certificates-and-keys)
     * [Options](#options)
+* [Demos](#demos)
 * [Differences with the PHP library](#differences-with-the-php-library)
 * [Documentation](#documentation)
 * [Development](#development)
@@ -363,6 +366,19 @@ const analyzed = XMLDSigToken.analyzeXMLToken(xml, {
   digestAlgorithm: XMLDSigToken.SHA512,
 });
 ```
+
+
+## Demos
+
+Two demos show the tokens at work, online, with nothing to install. They run the PHP library, whose tokens this library creates and verifies the same way (see [Interoperability](#interoperability)); its README tells how to run them on your machine ([demo](https://github.com/webcoder31/ezxmldsig-php#demo), [single sign-on demo](https://github.com/webcoder31/ezxmldsig-php#single-sign-on-demo)).
+
+**The token lab, https://ezxmldsig.wbcdr.dev/**: create a token, read each block of its signature, follow the checks of the receiver one by one, and replay the attacks the library refuses.
+
+![The token lab: its animated illustration of a token verified and accepted, the issuer, and the annotated token with the block SignedInfo selected](https://webcoder31.github.io/ezxmldsig-doc/assets/screenshots/token-lab.png)
+
+**The single sign-on demo, https://sso.wbcdr.dev/**: three sites on three host names, an identity provider, which alone knows the passwords, and two applications that open on the tokens it signs, one login for both. A trace shows each hop, each token and each check.
+
+![The single sign-on demo: its home page, with its animated illustration of the flow, and the trace of a login on MAIL then of CRM entered without a new login](https://webcoder31.github.io/ezxmldsig-doc/assets/screenshots/single-sign-on.png)
 
 
 ## Differences with the PHP library
