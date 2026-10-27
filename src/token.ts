@@ -17,7 +17,7 @@ import xpath from 'xpath';
 import * as alg from './algorithms.js';
 import { canonicalize } from './c14n.js';
 import { escapeAttribute, escapeText, formatTokenDate, isXmlName, parseTokenDate, phpBase64Decode } from './encoding.js';
-import { readPem, type PemSource } from './material.js';
+import { extractCertificates, readPem, type PemSource } from './material.js';
 import {
   checkOptions,
   isAuthenticatedCipheringAlgorithm,
@@ -1566,30 +1566,6 @@ function decodeValue(bytes: Buffer): string | Buffer {
   } catch {
     return bytes;
   }
-}
-
-/**
- * The certificates of a PEM content, as xmlseclibs extracts them to write
- * them in the token (`staticGet509XCerts()`): the lines between each
- * `-----BEGIN CERTIFICATE` line and the next `-----END CERTIFICATE` line,
- * trimmed and joined.
- */
-function extractCertificates(pem: string): string[] {
-  const certificates: string[] = [];
-  let data: string | null = null;
-  for (const line of pem.split('\n')) {
-    if (data === null) {
-      if (line.startsWith('-----BEGIN CERTIFICATE')) {
-        data = '';
-      }
-    } else if (line.startsWith('-----END CERTIFICATE')) {
-      certificates.push(data);
-      data = null;
-    } else {
-      data += line.trim();
-    }
-  }
-  return certificates;
 }
 
 /**

@@ -1,0 +1,135 @@
+#!/bin/sh
+#
+# Generates the certificates of test/fixtures/seal/certs/, which the tests of
+# the seals use, in Docker.
+#
+# Usage:
+#   bin/gen-seal-test-certs
+#
+# A PKI of its own, apart from test/fixtures/certs/: its certificates name a
+# CRL distribution point and an OCSP responder, under the host name
+# pki.ezxmlseal.test (a reserved top-level domain). The library never calls
+# them; the tests that send seals to DSS serve them at that name, on the
+# Docker network of DSS. See the README of test/fixtures/seal/certs/.
+#
+# The script always runs itself again inside an Alpine Docker container
+# (alpine:3.22), whatever openssl the host has. The container runs as root,
+# to install openssl, and gives the written files back to the calling user.
+# The certificates are valid for 10 years.
+
+set -eu
+
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+case "${1:-}" in
+    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+if [ "${GEN_CERTS_IN_DOCKER:-}" != 1 ]; then
+    if ! docker info >/dev/null 2>&1; then
+        echo "Docker is not reachable (with Colima: colima start)." >&2
+        exit 1
+    fi
+    echo "Running in Docker (alpine:3.22)." >&2
+    exec docker run --rm -e GEN_CERTS_IN_DOCKER=1 \
+        -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+        -v "$ROOT_DIR:/work" -w /work \
+        --entrypoint sh alpine:3.22 -c \
+        'apk add --no-cache -q openssl >/dev/null && sh bin/gen-seal-test-certs "$@"' \
+        sh "$@"
+fi
+
+OUT_DIR="$ROOT_DIR/test/fixtures/seal/certs"
+SIGN_KEY_PASSWORD=signKeyPassword
+DAYS=3650
+PKI=http://pki.ezxmlseal.test
+
+WORK_DIR=$(mktemp -d)
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+cat > "$WORK_DIR/ext.cnf" <<EOF
+[req]
+distinguished_name = dn
+[dn]
+
+[root]
+basicConstraints = critical, CA:TRUE
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+
+[intermediate]
+basicConstraints = critical, CA:TRUE, pathlen:0
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$PKI/root.crl
+
+[seal]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, nonRepudiation
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$PKI/intermediate.crl
+authorityInfoAccess = OCSP;URI:$PKI/ocsp, caIssuers;URI:$PKI/intermediate.cer
+EOF
+
+# issue <name> <subject> <extension section> <key algorithm options> <issuer cert> <issuer key>
+# Issues $WORK_DIR/<name>.cert.pem for a new key, $WORK_DIR/<name>.key.pem;
+# without issuer, the certificate is signed by its own key.
+issue() {
+    name=$1 subject=$2 section=$3 keyopts=$4 issuer_cert=${5:-} issuer_key=${6:-}
+    # shellcheck disable=SC2086
+    openssl genpkey $keyopts -out "$WORK_DIR/$name.key.pem" 2>/dev/null
+    openssl req -new -key "$WORK_DIR/$name.key.pem" -subj "$subject" \
+        -config "$WORK_DIR/ext.cnf" -out "$WORK_DIR/$name.csr"
+    if [ -z "$issuer_cert" ]; then
+        set -- -key "$WORK_DIR/$name.key.pem"
+    else
+        set -- -CA "$issuer_cert" -CAkey "$issuer_key"
+    fi
+    openssl x509 -req -in "$WORK_DIR/$name.csr" -sha256 -days "$DAYS" "$@" \
+        -set_serial "0x$(openssl rand -hex 16)" \
+        -extfile "$WORK_DIR/ext.cnf" -extensions "$section" \
+        -out "$WORK_DIR/$name.cert.pem" 2>/dev/null
+}
+
+subject() {
+    echo "/C=DK/O=Lothbrok Ltd/OU=$1/CN=Lothbrok Seal Test"
+}
+
+RSA3072="-algorithm RSA -pkeyopt rsa_keygen_bits:3072"
+RSA2048="-algorithm RSA -pkeyopt rsa_keygen_bits:2048"
+RSA1024="-algorithm RSA -pkeyopt rsa_keygen_bits:1024"
+P256="-algorithm EC -pkeyopt ec_paramgen_curve:P-256"
+P384="-algorithm EC -pkeyopt ec_paramgen_curve:P-384"
+
+issue root "$(subject 'Seal Root CA')" root "$RSA3072"
+issue intermediate "$(subject 'Seal Intermediate CA')" intermediate "$RSA3072" "$WORK_DIR/root.cert.pem" "$WORK_DIR/root.key.pem"
+issue rsa3072 "$(subject 'RSA 3072 Seal Dept')" seal "$RSA3072" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
+issue rsa2048 "$(subject 'RSA 2048 Seal Dept')" seal "$RSA2048" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
+# Too short for a seal: the library refuses it.
+issue rsa1024 "$(subject 'RSA 1024 Seal Dept')" seal "$RSA1024" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
+issue p256 "$(subject 'P-256 Seal Dept')" seal "$P256" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
+issue p384 "$(subject 'P-384 Seal Dept')" seal "$P384" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
+
+# The keys of the signers are encrypted with the password of the tests.
+for name in rsa3072 rsa2048 rsa1024 p256 p384; do
+    openssl pkey -in "$WORK_DIR/$name.key.pem" -aes256 -passout "pass:$SIGN_KEY_PASSWORD" \
+        -out "$WORK_DIR/$name.key.enc.pem"
+    mv "$WORK_DIR/$name.key.enc.pem" "$WORK_DIR/$name.key.pem"
+done
+
+# Consistency check: what OpenSSL itself says of the chains.
+for name in rsa3072 rsa2048 p256 p384; do
+    openssl verify -CAfile "$WORK_DIR/root.cert.pem" -untrusted "$WORK_DIR/intermediate.cert.pem" \
+        "$WORK_DIR/$name.cert.pem" >/dev/null
+done
+
+mkdir -p "$OUT_DIR"
+rm -f "$OUT_DIR"/*.pem
+for f in "$WORK_DIR"/*.cert.pem "$WORK_DIR"/*.key.pem; do
+    cp "$f" "$OUT_DIR/"
+done
+chown "$HOST_UID:$HOST_GID" "$OUT_DIR"/*.pem
+echo "Certificates written to test/fixtures/seal/certs/:" >&2
+(cd "$OUT_DIR" && ls ./*.pem | sed 's#^\./#  #') >&2

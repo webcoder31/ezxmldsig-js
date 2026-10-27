@@ -127,7 +127,7 @@ Package `@webcoder31/ezxmlseal`, repository `ezxmlseal-js`, Cairn project `XSEAL
 const asice: Buffer = createSeal(
   [{ name: 'contract.pdf', content: pdfBytes }, { name: 'notes.md', content: mdBytes, mimeType: 'text/markdown' }],
   signKeyPath, signCertPath, signKeyPassword,
-  { chain: [intermediateCertPath], signatureAlgorithm: RSA_PSS_SHA256, digestAlgorithm: SHA256 },
+  { chain: [intermediateCertPath], signatureAlgorithm: RSA_PSS_SHA256, digestAlgorithm: SHA256, signingTime },
 );
 
 // Level T, without network access: the library builds the request and checks the response;
@@ -217,6 +217,8 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 - **`META-INF/manifest.xml` is required.** A container DSS built, from which only `manifest.xml` is removed, is rejected: `TOTAL_FAILED`, `FORMAT_FAILURE`, "The manifest file is absent!". DSS writes it with an entry for `/` (`application/vnd.etsi.asic-e+zip`) and one per sealed file, the path written as is (`manifest:full-path="notes d'été.md"`), with its media type.
 - **File names in `ds:Reference/@URI`**: DSS percent-encodes the space only. `contrat final.pdf` becomes `contrat%20final.pdf`; `notes d'été.md` becomes `notes%20d'été.md`, the apostrophe and the accented letter left as they are. The ZIP entries are named in UTF-8, flag 11 of the general purpose bits set.
 - **Namespaces**: XAdES `http://uri.etsi.org/01903/v1.3.2#` at levels B and T, root `asic:XAdESSignatures` in `http://uri.etsi.org/02918/v1.2.1#`. DSS canonicalizes `SignedInfo`, `SignedProperties` and the time-stamp with exclusive canonicalization (`http://www.w3.org/2001/10/xml-exc-c14n#`), and writes `IssuerSerialV2`, which the baseline says should not be included.
+- **Seals of this library** (level B), sent to DSS with the root CA of their tests as a trust anchor: every reference and the signed properties found and intact, the signature intact, with RSA-PSS (`http://www.w3.org/2007/05/xmldsig-more#sha256-rsa-MGF1`), RSA PKCS#1 v1.5 and ECDSA (P-256, P-384), with SHA-256 and SHA-512 digests. DSS also resolves references whose every segment is percent-encoded (`notes%20d'%C3%A9t%C3%A9.md`, `docs/a%23b%25c.txt`), and accepts `SigningCertificateV2` without `IssuerSerialV2`. A file altered after sealing gives `TOTAL_FAILED`, `HASH_FAILURE`.
+- **The message "Unable to build a certificate chain up to a trusted list!"** belongs to the qualification of the signature, which needs an EU trusted list, not to its validation: it remains with any trust anchor of our own.
 - **`mimetype`**: written first, stored, no extra field. The other entries are deflated. The ZIP has no comment.
 - **Media types**: DSS writes `application/pdf` for a `.pdf` file, and `application/octet-stream` for a `.md` file.
 - **A file added to a sealed container** is not an error for DSS: the indication does not change, a warning says "Not all files are signed!", and the scope of the signature lists the sealed files only. The rule of this design is stricter: such a file makes the seal invalid.

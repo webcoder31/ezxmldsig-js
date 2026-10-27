@@ -57,3 +57,27 @@ export function describeSource(source: unknown): string {
   }
   return source === null ? 'null' : Array.isArray(source) ? 'array' : typeof source;
 }
+
+/**
+ * The certificates of a PEM content, as xmlseclibs extracts them to write
+ * them in the token (`staticGet509XCerts()`): the lines between each
+ * `-----BEGIN CERTIFICATE` line and the next `-----END CERTIFICATE` line,
+ * trimmed and joined.
+ */
+export function extractCertificates(pem: string): string[] {
+  const certificates: string[] = [];
+  let data: string | null = null;
+  for (const line of pem.split('\n')) {
+    if (data === null) {
+      if (line.startsWith('-----BEGIN CERTIFICATE')) {
+        data = '';
+      }
+    } else if (line.startsWith('-----END CERTIFICATE')) {
+      certificates.push(data);
+      data = null;
+    } else {
+      data += line.trim();
+    }
+  }
+  return certificates;
+}
