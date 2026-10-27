@@ -27,16 +27,16 @@ export interface CrlOptions {
   thisUpdate?: Date;
   /** Null: no nextUpdate. */
   nextUpdate?: Date | null;
-  /** The revoked certificates: a fixture name, and the revocation date. */
+  /** The revoked certificates: a fixture name or the path of a PEM file, and the revocation date. */
   revoked?: { cert: string; date: Date; extensions?: Buffer[] }[];
   /** Extensions of the CRL (see extension()). */
   extensions?: Buffer[];
   alterSignature?: boolean;
 }
 
-/** The DER of a field of the TBSCertificate of a fixture certificate (serial 0, issuer 2, subject 4). */
+/** The DER of a field of the TBSCertificate of a fixture certificate, or of a PEM file (serial 0, issuer 2, subject 4). */
 function certificateField(name: string, index: number): Buffer {
-  const raw = new X509Certificate(readFileSync(`${CERTS}/${name}.cert.pem`)).raw;
+  const raw = new X509Certificate(readFileSync(name.endsWith('.pem') ? name : `${CERTS}/${name}.cert.pem`)).raw;
   const tbs = children(children(children(raw)[0]!.content)[0]!.content);
   const fields = tbs[0]!.tag === 0xa0 ? tbs.slice(1) : tbs;
   const field = fields[index]!;

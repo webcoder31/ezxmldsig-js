@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { before, describe, test } from 'node:test';
+import { after, before, describe, test } from 'node:test';
 
 import { addSignatureTimestamp, timestampRequest } from '../../dist/seal/extend.js';
 import { createSeal } from '../../dist/seal/seal.js';
@@ -15,6 +15,7 @@ import { verifySeal, type VerifyOptions } from '../../dist/seal/verify.js';
 import { currentCrls, extension, issuingDistributionPoint, makeCrl, opensslCaSkip, opensslCrl } from '../helpers/crl.ts';
 import { der } from '../helpers/der.ts';
 import { REVOKED, dssSkip, publishTestCrls, validateWithDss } from '../helpers/dss.ts';
+import { expiredSigner } from '../helpers/expired.ts';
 import { timestampResponse } from '../helpers/tsa.ts';
 
 const CERTS = 'test/fixtures/seal/certs';
@@ -185,6 +186,39 @@ describe('level T: the status at the time of the time-stamp', () => {
 
   test('no CRL for the time-stamping authority', () => {
     assert.match(error(container, [makeCrl(), makeCrl({ issuer: 'root' })]) ?? '', new RegExp(`No revocation data for the certificate ${TSA}`));
+  });
+});
+
+// The certificate of the signer expires after the time-stamp: a CRL issued
+// since tells its status only if it keeps the expired certificates
+// (ExpiredCertsOnCRL), from a date before the expiry.
+describe('level T: a signer expired since the time-stamp', () => {
+  const signer = expiredSigner(ago(60), secondsAgo(10));
+  after(() => signer.remove());
+  const sealed = createSeal([{ name: 'contrat.pdf', content: Buffer.from('%PDF-1.4\n') }], signer.keyPath, signer.certPath, 'signKeyPassword', { chain: [`${CERTS}/intermediate.cert.pem`], signingTime: secondsAgo(20) });
+  const container = addSignatureTimestamp(sealed, timestampResponse(timestampRequest(sealed), { time: secondsAgo(15) }), { tsaCertPath: TSA_ROOT });
+  const generalized = (date: Date) => der(0x18, Buffer.from(date.toISOString().replace(/[-:T]/g, '').replace(/\.\d{3}Z$/, 'Z')));
+  const keepsExpired = (from: Date) => extension('2.5.29.60', false, generalized(from));
+  const withSigner = (options: Parameters<typeof makeCrl>[0]) => [makeCrl(options), makeCrl({ issuer: 'root' }), makeCrl({ issuer: 'tsa-root' })];
+
+  test('a CRL issued after the time-stamp, while the certificate was valid: valid', () => {
+    assert.equal(error(container, withSigner({ thisUpdate: secondsAgo(12) })), null);
+  });
+
+  test('a CRL issued after the expiry proves nothing of the certificate', () => {
+    assert.match(error(container, withSigner({ thisUpdate: secondsAgo(5) })) ?? '', new RegExp(`No revocation data for the certificate ${SIGNER} issued after the time-stamp .*, while it was valid`));
+  });
+
+  test('a CRL issued after the expiry, that keeps the certificates expired since before: valid', () => {
+    assert.equal(error(container, withSigner({ thisUpdate: secondsAgo(5), extensions: [keepsExpired(ago(60))] })), null);
+  });
+
+  test('a CRL issued after the expiry, that keeps the certificates expired since after it only', () => {
+    assert.match(error(container, withSigner({ thisUpdate: secondsAgo(5), extensions: [keepsExpired(secondsAgo(7))] })) ?? '', /while it was valid/);
+  });
+
+  test('a CRL that keeps the expired certificates, and lists the signer revoked before the time-stamp', () => {
+    assert.match(error(container, withSigner({ thisUpdate: secondsAgo(5), extensions: [keepsExpired(ago(60))], revoked: [{ cert: signer.certPath, date: secondsAgo(17) }] })) ?? '', /, before the time-stamp/);
   });
 });
 

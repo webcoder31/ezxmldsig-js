@@ -19,7 +19,7 @@ import { children, der, octets, oid, seq } from './der.ts';
 const CERTS = 'test/fixtures/seal/certs';
 
 export interface OcspOptions {
-  /** The certificate whose status is given (a fixture name). */
+  /** The certificate whose status is given (a fixture name, or the path of a PEM file). */
   cert: string;
   /** Its issuer (default: intermediate). */
   issuer?: string;
@@ -36,6 +36,8 @@ export interface OcspOptions {
   /** Null: no nextUpdate. */
   nextUpdate?: Date | null;
   producedAt?: Date;
+  /** The archive cutoff (RFC 6960, 4.4.4), a single extension. */
+  archiveCutoff?: Date;
   /** The hash of the CertID (default: sha1). */
   certIdHash?: 'sha1' | 'sha256';
   /** The certificates of the response (default: the signer, if it is not the issuer). */
@@ -45,7 +47,8 @@ export interface OcspOptions {
   alterSignature?: boolean;
 }
 
-const certificate = (name: string) => new X509Certificate(readFileSync(`${CERTS}/${name}.cert.pem`));
+/** A fixture certificate by its name, or any certificate by the path of its PEM file. */
+const certificate = (name: string) => new X509Certificate(readFileSync(name.endsWith('.pem') ? name : `${CERTS}/${name}.cert.pem`));
 
 /** A field of the TBSCertificate of a fixture (serial 0, issuer 2, subject 4), in DER. */
 function field(name: string, index: number): Buffer {
@@ -87,7 +90,8 @@ export function makeOcspResponse(options: OcspOptions): Buffer {
       : der(0xa1, generalized(options.revocationTime ?? new Date(Date.now() - 60_000)), ...(options.reason === undefined ? [] : [der(0xa0, der(0x0a, Buffer.from([options.reason])))]));
   const thisUpdate = options.thisUpdate ?? new Date(Date.now() - 5_000);
   const nextUpdate = options.nextUpdate === undefined ? new Date(thisUpdate.getTime() + 86_400_000) : options.nextUpdate;
-  const single = seq(certId, certStatus, generalized(thisUpdate), ...(nextUpdate === null ? [] : [der(0xa0, generalized(nextUpdate))]));
+  const single = seq(certId, certStatus, generalized(thisUpdate), ...(nextUpdate === null ? [] : [der(0xa0, generalized(nextUpdate))]),
+    ...(options.archiveCutoff === undefined ? [] : [der(0xa1, seq(seq(oid('1.3.6.1.5.5.7.48.1.6'), octets(generalized(options.archiveCutoff)))))]));
   const responderId = (options.responderBy ?? 'name') === 'name'
     ? der(0xa1, field(responder, 4))
     : der(0xa2, octets(createHash('sha1').update(keyBits(responder)).digest()));

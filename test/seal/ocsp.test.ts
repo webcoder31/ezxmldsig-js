@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, test } from 'node:test';
+import { after, describe, test } from 'node:test';
 
 import { addSignatureTimestamp, timestampRequest } from '../../dist/seal/extend.js';
 import { createSeal } from '../../dist/seal/seal.js';
@@ -22,6 +22,7 @@ import { ocspSources, readOcspResponse } from '../../dist/seal/ocsp.js';
 import { X509Cert } from '../../dist/x509.js';
 import { makeCrl } from '../helpers/crl.ts';
 import { dssSkip, validateWithDss } from '../helpers/dss.ts';
+import { expiredSigner } from '../helpers/expired.ts';
 import { makeOcspResponse, opensslOcsp, opensslOcspSkip, type OcspOptions } from '../helpers/ocsp.ts';
 import { timestampResponse } from '../helpers/tsa.ts';
 
@@ -157,6 +158,72 @@ describe('level T: the status at the time of the time-stamp', () => {
   });
 });
 
+// The certificate of the signer expires after the time-stamp: a response
+// produced since tells its status only if its responder keeps that of the
+// expired certificates, from an archive cutoff before the expiry.
+describe('level T: a signer expired since the time-stamp', () => {
+  const signer = expiredSigner(new Date(Date.now() - 3_600_000), secondsAgo(10));
+  after(() => signer.remove());
+  const sealed = createSeal([{ name: 'contrat.pdf', content: Buffer.from('%PDF-1.4\n') }], signer.keyPath, signer.certPath, 'signKeyPassword', { chain: [`${CERTS}/intermediate.cert.pem`], signingTime: secondsAgo(20) });
+  const container = addSignatureTimestamp(sealed, timestampResponse(timestampRequest(sealed), { time: secondsAgo(15) }), { tsaCertPath: TRUST.tsaCertPath });
+  const status = (options: Partial<OcspOptions>) => check(container, [ocsp({ cert: signer.certPath, thisUpdate: secondsAgo(5), ...options })]).getError();
+
+  test('a response produced while the certificate was valid: valid', () => {
+    assert.equal(status({ thisUpdate: secondsAgo(12) }), null);
+  });
+
+  test('a response produced after the expiry, without archive cutoff, proves nothing of the certificate', () => {
+    assert.match(status({}) ?? '', /issued after the time-stamp .*, while it was valid/);
+  });
+
+  test('a response produced after the expiry, of an archive cutoff before it: valid', () => {
+    assert.equal(status({ archiveCutoff: new Date(Date.now() - 3_600_000) }), null);
+  });
+
+  test('a response produced after the expiry, of an archive cutoff after it', () => {
+    assert.match(status({ archiveCutoff: secondsAgo(7) }) ?? '', /while it was valid/);
+  });
+
+  test('a response of an archive cutoff before the expiry, the signer revoked before the time-stamp', () => {
+    assert.match(status({ archiveCutoff: new Date(Date.now() - 3_600_000), status: 'revoked', revocationTime: secondsAgo(17) }) ?? '', /, before the time-stamp/);
+  });
+});
+
+// The certificate of the time-stamping authority by a response of its root,
+// the chain of the signer by CRLs.
+describe('the time-stamping authority by OCSP', () => {
+  const container = timestamped();
+  const signerCrls = [makeCrl(), makeCrl({ issuer: 'root' })];
+  const authority = (options: Partial<OcspOptions> = {}) => makeOcspResponse({ cert: 'tsa', issuer: 'tsa-root', ...options });
+  const error = (response: Buffer) => verifySeal(container, { ...TRUST, crls: signerCrls, ocspResponses: [response] }).getError();
+
+  test('level T, good: valid', () => {
+    assert.equal(error(authority()), null);
+  });
+
+  test('level T, revoked after the time-stamp for cessation of operation (RFC 3161, 4): valid', () => {
+    assert.equal(error(authority({ status: 'revoked', revocationTime: secondsAgo(1), reason: 5 })), null);
+  });
+
+  test('level T, revoked after the time-stamp for a key compromise', () => {
+    assert.match(error(authority({ status: 'revoked', revocationTime: secondsAgo(1), reason: 1 })) ?? '', /after the time-stamp but for a compromise of a key/);
+  });
+
+  test('level T, revoked after the time-stamp without a reason', () => {
+    assert.match(error(authority({ status: 'revoked', revocationTime: secondsAgo(1) })) ?? '', /after the time-stamp but without a reason/);
+  });
+
+  test('level LT: the response in the validation data of the time-stamp, valid by what the seal embeds alone', () => {
+    const extended = addValidationData(container, { ...TRUST, crls: signerCrls, ocspResponses: [authority()] });
+    const xml = readZip(extended).find((e) => e.name === 'META-INF/signatures001.xml')?.content.toString('utf8') as string;
+    assert.match(xml, /<xades141:TimeStampValidationData[^>]*>(?:(?!<\/xades141:TimeStampValidationData>).)*<xades:OCSPValues><xades:EncapsulatedOCSPValue>[^<]+<\/xades:EncapsulatedOCSPValue><\/xades:OCSPValues>/);
+    assert.equal((xml.match(/<xades:EncapsulatedOCSPValue>/g) ?? []).length, 1);
+    const result = verifySeal(extended, TRUST);
+    assert.equal(result.getError(), null);
+    assert.equal(result.getLevel(), 'LT');
+  });
+});
+
 describe('level LT: the responses embedded', () => {
   const crls = [makeCrl({ issuer: 'root' }), makeCrl({ issuer: 'tsa-root' })];
   const container = addValidationData(timestamped(), { ...TRUST, crls, ocspResponses: [ocsp({ signer: 'ocsp' })] });
@@ -199,6 +266,20 @@ describe('validation by DSS', { skip: dssSkip }, () => {
       ...TRUST,
       crls: [makeCrl({ issuer: 'root' }), makeCrl({ issuer: 'tsa-root' })],
       ocspResponses: [makeOcspResponse({ cert: 'offline', issuer: 'intermediate-offline' })],
+    });
+    const report = await validateWithDss(container);
+    const signature = report.signatures[0];
+    assert.equal(signature?.format, 'XAdES-BASELINE-LT');
+    assert.equal(signature?.indication, 'TOTAL_PASSED');
+    assert.deepEqual(signature?.errors, []);
+    assert.deepEqual(report.revocationOrigins, ['INPUT_DOCUMENT', 'INPUT_DOCUMENT', 'INPUT_DOCUMENT']);
+  });
+
+  test('offline, level LT, the signer and the time-stamping authority by OCSP responses: TOTAL_PASSED by the data of the seal only', async () => {
+    const container = addValidationData(timestamped('offline', 'tsa-offline'), {
+      ...TRUST,
+      crls: [makeCrl({ issuer: 'root' })],
+      ocspResponses: [makeOcspResponse({ cert: 'offline', issuer: 'intermediate-offline' }), makeOcspResponse({ cert: 'tsa-offline', issuer: 'tsa-root' })],
     });
     const report = await validateWithDss(container);
     const signature = report.signatures[0];
