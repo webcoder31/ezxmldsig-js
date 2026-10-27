@@ -1,6 +1,6 @@
 # Design: sealing documents with XAdES and ASiC-E
 
-Status: proposal, not implemented.
+Status: levels B, T and LT implemented in `src/seal/`, with revocation by CRL and OCSP; not exported by the package yet (see [Open points](#open-points)).
 
 ## Purpose and scope
 
@@ -21,16 +21,19 @@ In scope: levels B, T and LT. Revocation is part of the first version, since a t
 
 ## Normative basis
 
-| Document | Version read | Used for |
+| Document | Version | Clauses applied |
 |---|---|---|
-| ETSI EN 319 132-1, XAdES, building blocks and baseline signatures | V1.3.1 (2024-07) | structure of the signature, levels B-B and B-T (clause 6.3, Table 2) |
+| ETSI EN 319 132-1, XAdES, building blocks and baseline signatures | V1.3.1 (2024-07) | structure of the signature (4.3, 4.4.2, 5.2), levels B-B, B-T and B-LT (5.3, 5.4, 5.5.1, 6.3, Table 2) |
 | ETSI EN 319 162-1, ASiC, building blocks and baseline containers | V1.1.1 (2016-04) | layout of the container (clause 4.4.3, Table 5, Annex A) |
 | ETSI TS 119 312, cryptographic suites | V2.1.1 (2026-06) | algorithms and key sizes |
-| RFC 3161, time-stamp protocol (updated by RFC 5816) | not read yet | request and response of level T |
-| RFC 5280, certificates and CRLs | not read yet | CRL, CRL distribution points, authority information access |
+| RFC 3161, time-stamp protocol (updated by RFC 5816) | not read in full | request (2.4.1), response and TSTInfo (2.4.2), certificate of the authority (2.3), its revocation (4) |
+| RFC 5652, CMS | not read in full | the SignedData of the time-stamp token |
+| RFC 2634 and RFC 5035, ESS | not read in full | the attributes signingCertificate and signingCertificateV2 of the token |
+| RFC 5280, certificates and CRLs | not read in full | CRL (5), issuing distribution point (5.2.5), reason code (5.3.1), CRL distribution points (4.2.1.13), authority information access (4.2.2.1), times (4.1.2.5) |
 | RFC 6960, OCSP | 2013-06 | request and response, authorized responders (4.2.2.2), archive cutoff (4.4.4) |
 | RFC 5019, lightweight OCSP profile | 2007-09 | the SHA-1 CertID of the requests (2.1.1) |
-| RFC 6931, XML security algorithm identifiers | not read yet | URIs of RSA-PSS and ECDSA |
+| RFC 6931, XML security algorithm identifiers | not read in full | URIs of RSA-PSS (2.3.10) and ECDSA (2.3.6) |
+| RFC 4055 and RFC 4050 | not read in full | the parameters of RSA-PSS; the value `r \|\| s` of ECDSA |
 | OASIS ODF 1.2, part 3 | not read in full | `META-INF/manifest.xml`, relative URIs |
 
 ## What a seal is
@@ -122,9 +125,9 @@ The material needed to validate the signature is embedded, in `UnsignedSignature
 
 The revocation values are issued after the time of the time-stamp: they show that the certificates were not revoked at that time. Right after a time-stamp, a CA has not issued such a CRL yet: the extension to level LT waits for its next one.
 
-## Proposed API
+## API
 
-Package `@webcoder31/ezxmlseal`, repository `ezxmlseal-js`, Cairn project `XSEALJS`.
+Package `@webcoder31/ezxmlseal`, repository `ezxmlseal-js`, Cairn project `XSEALJS`. The functions below live in `src/seal/` of ezxmldsig-js until the package exists; its entry point does not export them.
 
 ```ts
 // Level B: seal files into an ASiC-E container.
@@ -150,7 +153,7 @@ const asiceLT: Buffer = addValidationData(asiceT, { caCertPath, tsaCertPath, crl
 // Verification.
 const seal = verifySeal(asiceLT, { caCertPath, tsaCertPath, expectedSubject });  // tsaCertPath: required for a time-stamped seal
 // Below level LT, the revocation data come from the caller: verifySeal(asiceT, { …, crls, ocspResponses }).
-// At level LT, CRLs of the caller are used besides those of the seal: a newer one can tell a revocation.
+// At level LT, the data of the caller are used besides those of the seal: a newer one can tell a revocation.
 seal.isValid();            // structure, algorithms, digests, signature, trust, time-stamp, revocation
 seal.getLevel();           // 'B', 'T' or 'LT'
 seal.getSigningTime();     // the claimed time (SigningTime)
@@ -172,7 +175,7 @@ The API follows the conventions of `XMLDSigToken`: synchronous, files given as p
 - **Revocation is checked by default**, for the signing certificate, the CA certificates of its path (the trust anchor excepted) and the certificate of the time-stamping authority. The data come from the seal (level LT) or from the caller (`crls`, `ocspResponses`). A certificate without revocation data makes the seal invalid, as it makes it indeterminate for DSS. `revocation: false` turns the check off, for applications of our own whose CA publishes no CRL: the result then says so (`isRevocationChecked()` false), so that a seal checked without revocation is never taken for one checked with it.
 - **The date of the revocation data**: at level T and LT, a CRL or an OCSP response counts only if it was issued after the time of the time-stamp, and the certificate must not be revoked before that time; at level B, and for the time-stamping authority at level T, the data must be current (the next update of a CRL not passed). At level LT, the data of the time-stamping authority are embedded, and no longer current when the seal is verified: they count if issued after the time-stamp, as those of the signer. A CRL issued after the certificate expired proves nothing of it, a CA being free to drop the expired certificates from its CRLs, unless the CRL keeps them (`ExpiredCertsOnCRL`). The newest CRL tells the status; of two issued at the same second, the precision of their dates, the one that lists the certificate.
 - **A revoked time-stamping authority** (RFC 3161, 4): a revocation after the time-stamp leaves its tokens valid only if the CRL gives a reason that is not a compromise of a key (`keyCompromise`, `cACompromise`, `aACompromise`); without a reason, every token of the authority is distrusted, whatever its date.
-- **Level LT is self-sufficient**: the validation data a seal embeds must tell the status of every certificate by themselves, or the seal is invalid. CRLs given by the caller are used besides them, so that a revocation published since is seen. `getLevel()` returns `'LT'` from the structure of the seal when it is verified with `revocation: false`.
+- **Level LT is self-sufficient**: the validation data a seal embeds must tell the status of every certificate by themselves, or the seal is invalid. CRLs and OCSP responses given by the caller are used besides them, so that a revocation published since is seen. `getLevel()` returns `'LT'` from the structure of the seal when it is verified with `revocation: false`.
 - **The CRLs used** are complete and direct: a delta CRL, an indirect CRL, a CRL restricted to some reasons or a critical extension not known make the CRL unusable, and the caller who gave it gets an exception. A CRL restricted to end-entity or to CA certificates (issuing distribution point) covers those only.
 - **CRLs and OCSP responses are signed**: their signature is verified, with the algorithm policy of the seals. A CRL is signed by the CA that issued the certificate. An OCSP response is signed by that CA, or by a responder it delegated (RFC 6960, 4.2.2.2): a certificate it issued directly, of extended key usage `id-kp-OCSPSigning`, valid when the response was produced. The delegated responder must carry `id-pkix-ocsp-nocheck` (4.2.2.2.1): the library does not check the revocation of responders. A response whose status is `unknown`, or about another certificate, tells nothing.
 - **OCSP requests** identify the certificate by SHA-1 hashes of the name and of the key of its issuer, as the lightweight profile requires (RFC 5019, 2.1.1) and as responders expect: an identifier, not a signature. They have no nonce: the responses of a seal are kept, and the date rules above, not a nonce, tell whether a response counts. Responses with a CertID by SHA-256, SHA-384 or SHA-512 are accepted too. An OCSP response counts by the `thisUpdate` of its answer, as a CRL; the archive cutoff (4.4.4) plays the part of `ExpiredCertsOnCRL`.
@@ -203,14 +206,14 @@ RSA-PSS has a cost for the PHP library to come: `openssl_sign()` and `openssl_ve
 | RFC 3161 | none | new: request, response, token verification (a CMS signature) |
 | CRL, OCSP | none | new: parsing, verification of their signature, OCSP request |
 
-These parts are taken from ezxmldsig-js, not copied. The shared core is extracted once the seals work at level B, with boundaries drawn from both uses.
+These parts are taken from ezxmldsig-js, not copied: `src/seal/` imports its modules `algorithms`, `c14n`, `der`, `encoding`, `material`, `x509` and `xml`; `token`, `xmlenc` and `options` are used by the tokens only. Those seven modules are the outline of the shared core, whose extraction is an open point.
 
 ## Tests
 
 - **Unit tests** of each property and rule above, with certificates generated for the tests: RSA 3072, RSA 2048 (legacy), ECDSA P-256.
 - **Attack tests**, in the manner of the attack lab of the tokens: a file added to the container, a file replaced, a reference moved, a `SignedProperties` altered, a signing certificate swapped in `KeyInfo`, a time-stamp of another signature.
-- **Validation by DSS**, which does not go through our code: DSS 6.5.1 is built from the official `Dockerfile` of `esig/dss-demonstrations` and runs locally, started with its configuration by `bin/dss start`; every seal produced by the tests is sent to `POST /services/rest/validation/validateSignature`. A test asserts the format reported (`XAdES-BASELINE-B`, `XAdES-BASELINE-T`, container `ASiC-E`), and that no integrity error is reported. The root CA of the tests is a trust anchor of DSS (see [Behaviour of DSS 6.5.1](#behaviour-of-dss-651)). The tests publish the CRLs of the test PKI where `bin/dss` serves them to DSS, at `pki.ezxmlseal.test`: the expected indication is `TOTAL_PASSED`, at every level. Every test file publishes the same CRLs, which revoke one certificate kept for that purpose: the files run at the same time, and none changes what another one validates.
-- **Time-stamps**: recorded responses of public authorities for the unit tests, and a test authority of our own (`openssl ts`) for the error cases.
+- **Validation by DSS**, which does not go through our code: DSS 6.5.1 is built from the official `Dockerfile` of `esig/dss-demonstrations` and runs locally, started with its configuration by `bin/dss start`; every seal produced by the tests is sent to `POST /services/rest/validation/validateSignature`. A test asserts the format reported (`XAdES-BASELINE-B`, `XAdES-BASELINE-T`, `XAdES-BASELINE-LT`, container `ASiC-E`), and that no integrity error is reported. The root CA of the tests is a trust anchor of DSS (see [Behaviour of DSS 6.5.1](#behaviour-of-dss-651)). The tests publish the CRLs of the test PKI where `bin/dss` serves them to DSS, at `pki.ezxmlseal.test`: the expected indication is `TOTAL_PASSED`, at every level. Every test file publishes the same CRLs, which revoke one certificate kept for that purpose: the files run at the same time, and none changes what another one validates.
+- **Time-stamps, CRLs and OCSP responses** come from test issuers written apart from the library (`test/helpers/`), each field settable so that a test builds one fault, and from OpenSSL (`openssl ts`, `openssl ca`, `openssl ocsp`). No response of a public authority is recorded yet (see [Open points](#open-points)).
 
 ## Decisions
 
@@ -244,5 +247,6 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 
 ## Open points
 
+- **The package and the shared core**: the seals are not exported, and the modules of ezxmldsig-js they use are to be extracted into a dependency common to the tokens and the seals. What goes into it, its name, and what it changes for the published versions of ezxmldsig-js, are to be designed.
 - **Public time-stamping authorities**: which ones answer without an account, and whether their certificates carry the revocation data level LT needs.
 - **OCSP fetched by DSS**: the tests give DSS OCSP responses embedded in the seals only. `bin/dss` serves files, and an OCSP responder answers a POST: the certificates of the test PKI name one at `pki.ezxmlseal.test/ocsp`, which nothing answers yet.
