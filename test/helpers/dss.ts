@@ -4,7 +4,7 @@
  *
  * DSS runs apart, at DSS_URL (default http://127.0.0.1:8090): the image is
  * built from the Dockerfile of esig/dss-demonstrations, and DSS must trust
- * test/fixtures/seal/certs/root.cert.pem, through a dss-custom.properties
+ * test/fixtures/seal/certs/root.cert.pem and tsa-root.cert.pem, through a dss-custom.properties
  * file of its class path that names a keystore holding it
  * (trusted.source.keystore.type, .filename and .password).
  *

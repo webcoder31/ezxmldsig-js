@@ -108,6 +108,8 @@ The rules of the baseline this structure follows (EN 319 132-1):
 
 One `xades:SignatureTimeStamp` in `UnsignedSignatureProperties`, holding one RFC 3161 time-stamp token in `EncapsulatedTimeStamp`, and its `ds:CanonicalizationMethod` (5.3, 4.5, 6.3 n). The time-stamp covers the `ds:SignatureValue` element, tags included, canonicalized (5.3). It must be made before the signing certificate expires or is revoked (6.3 o).
 
+The library checks the token as a signature of its own before it embeds it, and again at verification: one signer, the signed attributes `contentType` (TSTInfo), `messageDigest` and the ESS `signingCertificate` (version 1 or 2) that binds the certificate of the authority, the extended key usage `timeStamping` of that certificate, alone and critical (RFC 3161, 2.3), the algorithms of the seals. Its `ds:CanonicalizationMethod` is required: clause 4.5 asks the new signatures for it, and gives no default.
+
 ### Level B-LT
 
 The material needed to validate the signature is embedded, in `UnsignedSignatureProperties`, after `SignatureTimeStamp` (5.4, Table 2):
@@ -132,7 +134,7 @@ const asice: Buffer = createSeal(
 
 // Level T, without network access: the library builds the request and checks the response;
 // the caller sends the request to the time-stamping authority of its choice.
-const request: Buffer = timestampRequest(asice);                 // DER TimeStampReq (RFC 3161)
+const request: Buffer = timestampRequest(asice, SHA256);         // DER TimeStampReq (RFC 3161)
 const response: Buffer = await post(tsaUrl, request);            // the caller's own HTTP client
 const asiceT: Buffer = addSignatureTimestamp(asice, response, { tsaCertPath });
 
@@ -144,7 +146,7 @@ const needs = validationDataRequests(asiceT, { chain, tsaChain });
 const asiceLT: Buffer = addValidationData(asiceT, { crls: [crlBytes], ocspResponses: [ocspBytes] });
 
 // Verification.
-const seal = verifySeal(asiceLT, { caCertPath, tsaCertPath, expectedSubject });
+const seal = verifySeal(asiceLT, { caCertPath, tsaCertPath, expectedSubject });  // tsaCertPath: required for a time-stamped seal
 // Below level LT, the revocation data come from the caller: verifySeal(asiceT, { …, crls, ocspResponses }).
 seal.isValid();            // structure, algorithms, digests, signature, trust, time-stamp, revocation
 seal.getLevel();           // 'B', 'T' or 'LT'
@@ -219,6 +221,7 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 - **`META-INF/manifest.xml` is required.** A container DSS built, from which only `manifest.xml` is removed, is rejected: `TOTAL_FAILED`, `FORMAT_FAILURE`, "The manifest file is absent!". DSS writes it with an entry for `/` (`application/vnd.etsi.asic-e+zip`) and one per sealed file, the path written as is (`manifest:full-path="notes d'été.md"`), with its media type.
 - **File names in `ds:Reference/@URI`**: DSS percent-encodes the space only. `contrat final.pdf` becomes `contrat%20final.pdf`; `notes d'été.md` becomes `notes%20d'été.md`, the apostrophe and the accented letter left as they are. The ZIP entries are named in UTF-8, flag 11 of the general purpose bits set.
 - **Namespaces**: XAdES `http://uri.etsi.org/01903/v1.3.2#` at levels B and T, root `asic:XAdESSignatures` in `http://uri.etsi.org/02918/v1.2.1#`. DSS canonicalizes `SignedInfo`, `SignedProperties` and the time-stamp with exclusive canonicalization (`http://www.w3.org/2001/10/xml-exc-c14n#`), and writes `IssuerSerialV2`, which the baseline says should not be included.
+- **Seals of this library at level T**: `XAdES-BASELINE-T`, the time-stamp of type `SIGNATURE_TIMESTAMP`, its imprint found and intact, its signature valid, with tokens of the test authority of the library and of `openssl ts`; the root of the authority is a trust anchor of DSS as the root of the signer is.
 - **Seals of this library** (level B), sent to DSS with the root CA of their tests as a trust anchor: every reference and the signed properties found and intact, the signature intact, with RSA-PSS (`http://www.w3.org/2007/05/xmldsig-more#sha256-rsa-MGF1`), RSA PKCS#1 v1.5 and ECDSA (P-256, P-384), with SHA-256 and SHA-512 digests. DSS also resolves references whose every segment is percent-encoded (`notes%20d'%C3%A9t%C3%A9.md`, `docs/a%23b%25c.txt`), and accepts `SigningCertificateV2` without `IssuerSerialV2`. A file altered after sealing gives `TOTAL_FAILED`, `HASH_FAILURE`.
 - **The message "Unable to build a certificate chain up to a trusted list!"** belongs to the qualification of the signature, which needs an EU trusted list, not to its validation: it remains with any trust anchor of our own.
 - **`mimetype`**: written first, stored, no extra field. The other entries are deflated. The ZIP has no comment.

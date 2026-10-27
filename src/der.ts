@@ -9,11 +9,14 @@
  */
 
 /**
- * A minimal reader of DER (the binary encoding of X.509 certificates), for
- * what node:crypto does not expose: the fields of names, the key usage, the
- * basic constraints and the criticality of extensions. The certificates it
- * reads have been parsed by OpenSSL first (node:crypto X509Certificate):
- * every malformation still throws here, and the certificate is then refused.
+ * A minimal reader and writer of DER (the binary encoding of X.509
+ * certificates), for what node:crypto does not expose: the fields of names,
+ * the key usage, the basic constraints and the criticality of extensions;
+ * the requests, responses and tokens of time-stamping (RFC 3161). The
+ * certificates it reads have been parsed by OpenSSL first (node:crypto
+ * X509Certificate); the time-stamping messages have not. Every malformation
+ * throws, and the certificate or the message is then refused. Only DER is
+ * read: an indefinite length is a malformation.
  */
 
 /** Universal tags. */
@@ -165,4 +168,75 @@ export function decodeBits(element: Element): boolean[] {
     bits.push(((element.content[1 + (i >> 3)] as number) >> (7 - (i & 7)) & 1) === 1);
   }
   return bits;
+}
+
+/** Decodes a GeneralizedTime in UTC (`YYYYMMDDhhmmss[.f]Z`, RFC 5280 4.1.2.5.2, RFC 3161 2.4.2). */
+export function decodeGeneralizedTime(element: Element): Date {
+  const text = element.tag === TAG.GENERALIZED_TIME ? element.content.toString('latin1') : '';
+  const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\.\d*[1-9])?Z$/.exec(text);
+  if (match === null) {
+    throw new Error('DER: GeneralizedTime in UTC expected.');
+  }
+  const [, year, month, day, hour, minute, second, fraction] = match;
+  const time = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second), Math.floor(Number(fraction ?? 0) * 1000));
+  const date = new Date(time);
+  if (date.getUTCDate() !== Number(day) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCHours() !== Number(hour)) {
+    throw new Error('DER: invalid GeneralizedTime.');
+  }
+  return date;
+}
+
+/** Decodes an integer into its unsigned big-endian bytes (a serial number, a nonce). */
+export function decodeUnsigned(element: Element): Buffer {
+  if (element.tag !== TAG.INTEGER || element.content.length === 0 || element.content[0]! & 0x80) {
+    throw new Error('DER: non-negative integer expected.');
+  }
+  return element.content[0] === 0 && element.content.length > 1 ? element.content.subarray(1) : element.content;
+}
+
+/** Encodes an element: its identifier octet, its length (definite, minimal), its content. */
+export function encode(tag: number, ...content: Buffer[]): Buffer {
+  const body = Buffer.concat(content);
+  let length: Buffer;
+  if (body.length < 0x80) {
+    length = Buffer.from([body.length]);
+  } else {
+    const bytes: number[] = [];
+    for (let rest = body.length; rest > 0; rest = Math.floor(rest / 256)) {
+      bytes.unshift(rest % 256);
+    }
+    length = Buffer.from([0x80 | bytes.length, ...bytes]);
+  }
+  return Buffer.concat([Buffer.from([tag]), length, body]);
+}
+
+/** Encodes an element read by readElements() again: DER has a single encoding. */
+export function reencode(element: Element): Buffer {
+  return encode(element.tag, element.content);
+}
+
+/** Encodes an object identifier given in its dotted form. */
+export function encodeOid(oid: string): Buffer {
+  const arcs = oid.split('.').map(Number);
+  if (arcs.length < 2 || arcs.some((arc) => !Number.isSafeInteger(arc) || arc < 0)) {
+    throw new Error(`DER: invalid object identifier ${oid}.`);
+  }
+  const bytes: number[] = [];
+  for (const arc of [(arcs[0] as number) * 40 + (arcs[1] as number), ...arcs.slice(2)]) {
+    const group = [arc & 0x7f];
+    for (let rest = Math.floor(arc / 128); rest > 0; rest = Math.floor(rest / 128)) {
+      group.unshift((rest & 0x7f) | 0x80);
+    }
+    bytes.push(...group);
+  }
+  return encode(TAG.OID, Buffer.from(bytes));
+}
+
+/** Encodes a non-negative integer given as unsigned big-endian bytes, or as a small number. */
+export function encodeInteger(value: Buffer | number): Buffer {
+  let bytes = typeof value === 'number' ? Buffer.from(value.toString(16).padStart(2, '0').replace(/^(.(..)*)$/, '0$1'), 'hex') : value;
+  while (bytes.length > 1 && bytes[0] === 0 && !(bytes[1]! & 0x80)) {
+    bytes = bytes.subarray(1);
+  }
+  return encode(TAG.INTEGER, bytes[0]! & 0x80 ? Buffer.concat([Buffer.from([0]), bytes]) : bytes);
 }

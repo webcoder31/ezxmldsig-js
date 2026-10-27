@@ -181,7 +181,7 @@ describe('attacks on the signature', () => {
     ['a reference to META-INF', (x) => x.replace('URI="contrat%20final.pdf"', 'URI="META-INF/manifest.xml"'), /points at no file/],
     ['two references to the same file', (x) => x.replace(/(<ds:Reference Id="[^"]+-R1"[^>]*>.*?<\/ds:Reference>)/, (r) => r + r.replace(/ Id="[^"]+"/, '')), /Two references point at the same file/],
     ['a DataObjectFormat removed', (x) => x.replace(/<xades:DataObjectFormat ObjectReference="#[^"]+-R2">.*?<\/xades:DataObjectFormat>/, ''), /has no DataObjectFormat/],
-    ['unsigned properties', (x) => x.replace('</xades:SignedProperties>', '</xades:SignedProperties><xades:UnsignedProperties/>'), /Unsigned properties/],
+    ['empty unsigned properties', (x) => x.replace('</xades:SignedProperties>', '</xades:SignedProperties><xades:UnsignedProperties/>'), /Missing xades:UnsignedSignatureProperties/],
     ['a signature policy', (x) => x.replace('</xades:SigningCertificateV2>', '</xades:SigningCertificateV2><xades:SignaturePolicyIdentifier/>'), /Unexpected or misplaced element xades:SignaturePolicyIdentifier/],
     ['SigningCertificate version 1', (x) => x.replace('xades:SigningCertificateV2>', 'xades:SigningCertificate>').replace('xades:SigningCertificateV2>', 'xades:SigningCertificate>'), /Unexpected or misplaced element xades:SigningCertificate in/],
     ['a second ds:Object', (x) => x.replace('</ds:Signature>', '<ds:Object Id="extra"/></ds:Signature>'), /Too many ds:Object/],
@@ -220,7 +220,7 @@ describe('misuses throw', () => {
   });
 
   test('a CA certificate file that cannot be read', () => {
-    assert.throws(() => verifySeal(valid, { caCertPath: `${CERTS}/missing.pem` }), /cannot read the CA certificate file/);
+    assert.throws(() => verifySeal(valid, { caCertPath: `${CERTS}/missing.pem` }), /cannot read the certificate file .*'caCertPath'/);
   });
 
   test('a container that is not bytes', () => {

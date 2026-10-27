@@ -71,6 +71,21 @@ subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid
 crlDistributionPoints = URI:$PKI/intermediate.crl
 authorityInfoAccess = OCSP;URI:$PKI/ocsp, caIssuers;URI:$PKI/intermediate.cer
+
+[tsa]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = critical, timeStamping
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$PKI/tsa-root.crl
+
+[tsa_no_eku]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$PKI/tsa-root.crl
 EOF
 
 # issue <name> <subject> <extension section> <key algorithm options> <issuer cert> <issuer key>
@@ -112,6 +127,12 @@ issue rsa1024 "$(subject 'RSA 1024 Seal Dept')" seal "$RSA1024" "$WORK_DIR/inter
 issue p256 "$(subject 'P-256 Seal Dept')" seal "$P256" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
 issue p384 "$(subject 'P-384 Seal Dept')" seal "$P384" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
 
+# A time-stamping authority under a root of its own, and a certificate of
+# that root without the extended key usage timeStamping.
+issue tsa-root "$(subject 'TSA Root CA')" root "$RSA3072"
+issue tsa "$(subject 'Time-Stamping Unit')" tsa "$RSA3072" "$WORK_DIR/tsa-root.cert.pem" "$WORK_DIR/tsa-root.key.pem"
+issue tsa-no-eku "$(subject 'Time-Stamping Unit Without EKU')" tsa_no_eku "$P256" "$WORK_DIR/tsa-root.cert.pem" "$WORK_DIR/tsa-root.key.pem"
+
 # The keys of the signers are encrypted with the password of the tests.
 for name in rsa3072 rsa2048 rsa1024 p256 p384; do
     openssl pkey -in "$WORK_DIR/$name.key.pem" -aes256 -passout "pass:$SIGN_KEY_PASSWORD" \
@@ -124,6 +145,7 @@ for name in rsa3072 rsa2048 p256 p384; do
     openssl verify -CAfile "$WORK_DIR/root.cert.pem" -untrusted "$WORK_DIR/intermediate.cert.pem" \
         "$WORK_DIR/$name.cert.pem" >/dev/null
 done
+openssl verify -CAfile "$WORK_DIR/tsa-root.cert.pem" -purpose timestampsign "$WORK_DIR/tsa.cert.pem" >/dev/null
 
 mkdir -p "$OUT_DIR"
 rm -f "$OUT_DIR"/*.pem
