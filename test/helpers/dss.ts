@@ -2,11 +2,10 @@
  * Validation of seals by DSS (Digital Signature Service, the validator of
  * the European Commission), which does not go through the code under test.
  *
- * DSS runs apart, at DSS_URL (default http://127.0.0.1:8090): the image is
- * built from the Dockerfile of esig/dss-demonstrations, and DSS must trust
- * test/fixtures/seal/certs/root.cert.pem and tsa-root.cert.pem, through a dss-custom.properties
- * file of its class path that names a keystore holding it
- * (trusted.source.keystore.type, .filename and .password).
+ * DSS runs apart, at DSS_URL (default http://127.0.0.1:8090), started by
+ * bin/dss start: built from the Dockerfile of esig/dss-demonstrations, it
+ * trusts test/fixtures/seal/certs/root.cert.pem and tsa-root.cert.pem, and
+ * reaches the CRL and OCSP of the test PKI at pki.ezxmlseal.test.
  *
  * The tests that need it are skipped, with the reason, when DSS does not
  * answer. In continuous integration (CI=true), they fail instead.
