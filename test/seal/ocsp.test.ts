@@ -19,7 +19,7 @@ import { addValidationData, validationDataRequests } from '../../dist/seal/valid
 import { verifySeal, type VerifyOptions } from '../../dist/seal/verify.js';
 import { readZip, writeZip } from '../../dist/seal/zip.js';
 import { ocspSources, readOcspResponse } from '../../dist/seal/ocsp.js';
-import { X509Cert } from '../../dist/x509.js';
+import { X509Cert } from '../../dist/core/x509.js';
 import { makeCrl } from '../helpers/crl.ts';
 import { dssSkip, validateWithDss } from '../helpers/dss.ts';
 import { expiredSigner } from '../helpers/expired.ts';

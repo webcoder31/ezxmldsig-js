@@ -1,6 +1,6 @@
 # Design: sealing documents with XAdES and ASiC-E
 
-Status: levels B, T and LT implemented in `src/seal/`, with revocation by CRL and OCSP; not exported by the package yet, whose layout is proposed in [Packaging](#packaging).
+Status: levels B, T and LT implemented in `src/seal/`, with revocation by CRL and OCSP, exported as `@webcoder31/ezxmldsig/seal` (see [Packaging](#packaging)); not published yet.
 
 ## Purpose and scope
 
@@ -127,7 +127,7 @@ The revocation values are issued after the time of the time-stamp: they show tha
 
 ## API
 
-The seals are a branch of the package `@webcoder31/ezxmldsig`, next to the tokens (see [Packaging](#packaging)). Until that layout is in place, the functions below live in `src/seal/`, and the entry point of the package does not export them.
+The seals are a branch of the package `@webcoder31/ezxmldsig`, next to the tokens (see [Packaging](#packaging)), in `src/seal/`.
 
 ```ts
 import { createSeal, timestampRequest, addSignatureTimestamp, validationDataRequests, addValidationData, verifySeal } from '@webcoder31/ezxmldsig/seal';
@@ -198,12 +198,12 @@ RSA-PSS has a cost for the PHP library to come: `openssl_sign()` and `openssl_ve
 
 | Need | Existing | Work |
 |---|---|---|
-| Canonicalization with its guards | `canonicalize()` (`src/c14n.ts`) | none |
-| Guarded XML parsing | `loadXML()` (`src/xml.ts`) | none |
-| Algorithm identifiers | `src/algorithms.ts` | add RSA-PSS and ECDSA (RFC 6931) |
-| Certificates, chain of trust | `X509Cert.isTrustedBy()` (`src/x509.ts`) | check at a given date: an optional parameter, today `Date.now()` |
-| DER | reader (`src/der.ts`) | an encoder, for the time-stamp request |
-| Signature, its references and their verification | specific to tokens (`src/token.ts`) | new: several detached references, typed references, signed properties |
+| Canonicalization with its guards | `canonicalize()` (`src/core/c14n.ts`) | none |
+| Guarded XML parsing | `loadXML()` (`src/core/xml.ts`) | none |
+| Algorithm identifiers | `src/core/algorithms.ts` | add RSA-PSS and ECDSA (RFC 6931) |
+| Certificates, chain of trust | `X509Cert.isTrustedBy()` (`src/core/x509.ts`) | check at a given date: an optional parameter, today `Date.now()` |
+| DER | reader (`src/core/der.ts`) | an encoder, for the time-stamp request |
+| Signature, its references and their verification | specific to tokens (`src/token/token.ts`) | new: several detached references, typed references, signed properties |
 | ZIP | none | new: a writer, and a strict reader (see decisions) |
 | RFC 3161 | none | new: request, response, token verification (a CMS signature) |
 | CRL, OCSP | none | new: parsing, verification of their signature, OCSP request |
@@ -249,7 +249,7 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 
 ## Packaging
 
-Status: proposal, to be decided.
+Status: in place in Node.js; to do in PHP.
 
 ### One package, three branches
 
@@ -330,6 +330,5 @@ The rule that `core` imports neither `token` nor `seal`, and that `token` and `s
 
 ## Open points
 
-- **The layout of the package**: the seals are not exported yet; the layout in three branches is proposed in [Packaging](#packaging), to be decided.
 - **Public time-stamping authorities**: which ones answer without an account, and whether their certificates carry the revocation data level LT needs.
 - **OCSP fetched by DSS**: the tests give DSS OCSP responses embedded in the seals only. `bin/dss` serves files, and an OCSP responder answers a POST: the certificates of the test PKI name one at `pki.ezxmlseal.test/ocsp`, which nothing answers yet.

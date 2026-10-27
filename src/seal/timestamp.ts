@@ -28,8 +28,8 @@ import { createHash } from 'node:crypto';
 import {
   TAG, childrenOf, decodeGeneralizedTime, decodeOid, decodeSmallInteger, decodeUnsigned, encode, encodeInteger, encodeOid,
   readElement, readElements, reencode, type Element,
-} from '../der.js';
-import { X509Cert } from '../x509.js';
+} from '../core/der.js';
+import { X509Cert } from '../core/x509.js';
 import { OIDS_OF_DIGESTS, digestOf, sequenceOf, verifySignature } from './pkix.js';
 
 const OID = {

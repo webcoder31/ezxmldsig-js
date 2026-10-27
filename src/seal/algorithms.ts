@@ -10,25 +10,20 @@
 
 /**
  * The algorithms of the seals, and their parameters for node:crypto. The
- * identifiers of RSA-PSS and ECDSA are those of RFC 6931; the digests are
- * those of the tokens (src/algorithms.ts), SHA-1 and RIPEMD-160 excepted.
+ * identifiers, RSA-PSS and ECDSA included, are those of the core
+ * (src/core/algorithms.ts); the digests are those of the tokens, SHA-1 and
+ * RIPEMD-160 excepted.
  */
 
 import { constants } from 'node:crypto';
 
-import { RSA_SHA256, RSA_SHA384, RSA_SHA512, SHA256, SHA384, SHA512 } from '../algorithms.js';
+import {
+  ECDSA_SHA256, ECDSA_SHA384, ECDSA_SHA512, RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512, RSA_SHA256, RSA_SHA384, RSA_SHA512, SHA256, SHA384, SHA512,
+} from '../core/algorithms.js';
 
-export { EXC_C14N, RSA_SHA256, RSA_SHA384, RSA_SHA512, SHA256, SHA384, SHA512 } from '../algorithms.js';
-
-/** RSASSA-PSS, MGF1 with the same digest, salt as long as the digest (RFC 6931, 2.3.10). */
-export const RSA_PSS_SHA256 = 'http://www.w3.org/2007/05/xmldsig-more#sha256-rsa-MGF1';
-export const RSA_PSS_SHA384 = 'http://www.w3.org/2007/05/xmldsig-more#sha384-rsa-MGF1';
-export const RSA_PSS_SHA512 = 'http://www.w3.org/2007/05/xmldsig-more#sha512-rsa-MGF1';
-
-/** ECDSA, the value written as r || s (RFC 6931, 2.3.6; RFC 4050). */
-export const ECDSA_SHA256 = 'http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256';
-export const ECDSA_SHA384 = 'http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha384';
-export const ECDSA_SHA512 = 'http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512';
+export {
+  ECDSA_SHA256, ECDSA_SHA384, ECDSA_SHA512, EXC_C14N, RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512, RSA_SHA256, RSA_SHA384, RSA_SHA512, SHA256, SHA384, SHA512,
+} from '../core/algorithms.js';
 
 /** The node:crypto names of the digest algorithms of the seals. */
 export const DIGESTS: Readonly<Record<string, string>> = {

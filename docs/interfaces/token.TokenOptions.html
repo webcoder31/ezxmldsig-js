@@ -1,0 +1,195 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>TokenOptions | ezxmldsig for Node.js - v1.0.3</title><meta name="description" content="Documentation for ezxmldsig for Node.js"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">ezxmldsig for Node.js - v1.0.3</a>
+<div id="tsd-toolbar-links"><a href="https://github.com/webcoder31/ezxmldsig-js">GitHub</a><a href="https://www.npmjs.com/package/@webcoder31/ezxmldsig">npm</a></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/token.html">token</a></li>
+<li><a href="" aria-current="page">TokenOptions</a></li></ul>
+<h1>Interface TokenOptions</h1></div>
+<section class="tsd-panel tsd-comment">
+<div class="tsd-comment tsd-typography"><p>The options of the four factories.</p>
+<p>Each option applies to a context: token creation (<code>createXMLToken()</code>,
+<code>createSecureXMLToken()</code>), token analysis (<code>analyzeXMLToken()</code>,
+<code>analyzeSecureXMLToken()</code>), or both. The encryption options only apply
+when an encryption certificate (creation) or a decryption key (analysis)
+is given. An unknown option, an option given out of its context, or an
+option whose value is null, undefined or invalid throws: none is ignored.</p>
+<p>The algorithm options apply to both contexts: at creation, they are the
+algorithms the token is built with; at analysis, the algorithms the token
+must have been built with. A token built with other algorithms is
+rejected (<code>getError()</code> names them), unless <code>checkSigningAlgorithms</code> or
+<code>checkCryptingAlgorithms</code> is false. Their values are the URIs of the
+XMLDSIG and XML Encryption specifications, given by the constants of
+<code>XMLDSigToken</code> (e.g. <code>XMLDSigToken.RSA_SHA512</code>).</p>
+</div></section>
+<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">TokenOptions</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#audience">audience</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#base64encode">base64Encode</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#cacertpath">caCertPath</a><span class="tsd-signature-symbol">?:</span> <a href="../types/core.PemSource.html" class="tsd-signature-type tsd-kind-type-alias">PemSource</a> <span class="tsd-signature-symbol">|</span> <a href="../types/core.PemSource.html" class="tsd-signature-type tsd-kind-type-alias">PemSource</a><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#canonicalizationalgorithm">canonicalizationAlgorithm</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#checkcryptingalgorithms">checkCryptingAlgorithms</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#checksigningalgorithms">checkSigningAlgorithms</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#cryptalgorithm">cryptAlgorithm</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#digestalgorithm">digestAlgorithm</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#expectedaudience">expectedAudience</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#expectedsubject">expectedSubject</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#sessionkeycipheringalgorithm">sessionKeyCipheringAlgorithm</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#signaturealgorithm">signatureAlgorithm</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#signercertpath">signerCertPath</a><span class="tsd-signature-symbol">?:</span> <a href="../types/core.PemSource.html" class="tsd-signature-type tsd-kind-type-alias">PemSource</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#validity">validity</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#xmldsignsprefix">xmldsigNsPrefix</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div>
+<section class="tsd-panel-group tsd-index-group">
+<section class="tsd-panel tsd-index-panel">
+<details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h5 class="tsd-index-heading uppercase">Index</h5></summary>
+<div class="tsd-accordion-details">
+<section class="tsd-index-section">
+<h3 class="tsd-index-heading tsd-anchor-link" id="properties">Properties<a href="#properties" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-index-list"><a href="#audience" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>audience?</span></a>
+<a href="#base64encode" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>base64<wbr/>Encode?</span></a>
+<a href="#cacertpath" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>ca<wbr/>Cert<wbr/>Path?</span></a>
+<a href="#canonicalizationalgorithm" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>canonicalization<wbr/>Algorithm?</span></a>
+<a href="#checkcryptingalgorithms" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>check<wbr/>Crypting<wbr/>Algorithms?</span></a>
+<a href="#checksigningalgorithms" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>check<wbr/>Signing<wbr/>Algorithms?</span></a>
+<a href="#cryptalgorithm" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>crypt<wbr/>Algorithm?</span></a>
+<a href="#digestalgorithm" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>digest<wbr/>Algorithm?</span></a>
+<a href="#expectedaudience" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>expected<wbr/>Audience?</span></a>
+<a href="#expectedsubject" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>expected<wbr/>Subject?</span></a>
+<a href="#sessionkeycipheringalgorithm" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>session<wbr/>Key<wbr/>Ciphering<wbr/>Algorithm?</span></a>
+<a href="#signaturealgorithm" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>signature<wbr/>Algorithm?</span></a>
+<a href="#signercertpath" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>signer<wbr/>Cert<wbr/>Path?</span></a>
+<a href="#validity" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>validity?</span></a>
+<a href="#xmldsignsprefix" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>xmldsig<wbr/>Ns<wbr/>Prefix?</span></a>
+</div></section></div></details></section></section>
+<details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h2 class="tsd-anchor-link" id="properties-1">Properties<a href="#properties-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
+<section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="audience"><code class="tsd-tag">Optional</code><span>audience</span><a href="#audience" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">audience</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span></div>
+<div class="tsd-comment tsd-typography"><p>Creation. The audience, or the list of audiences, the token is
+addressed to: names of the receivers (an application name, a URL...),
+agreed between the issuer and each receiver. Each one is a non-empty
+string, without surrounding spaces nor control characters. They are
+written in the token, covered by the signature (see <code>getAudience()</code>).
+Default: none.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="base64encode"><code class="tsd-tag">Optional</code><span>base64<wbr/>Encode</span><a href="#base64encode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">base64Encode</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>Creation. Whether to encode the values of the data in base64 (marked
+<code>Algorithm=&quot;base64&quot;</code>). Default: true.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="cacertpath"><code class="tsd-tag">Optional</code><span>ca<wbr/>Cert<wbr/>Path</span><a href="#cacertpath" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">caCertPath</span><span class="tsd-signature-symbol">?:</span> <a href="../types/core.PemSource.html" class="tsd-signature-type tsd-kind-type-alias">PemSource</a> <span class="tsd-signature-symbol">|</span> <a href="../types/core.PemSource.html" class="tsd-signature-type tsd-kind-type-alias">PemSource</a><span class="tsd-signature-symbol">[]</span></div>
+<div class="tsd-comment tsd-typography"><p>Analysis. The trusted CA certificates: a PEM file or content, or a list
+of them, each of which may hold several certificates. The chain of the
+signing certificate must be verified up to a self-signed certificate of
+them: give the issuing CA and the certificates up to its root. Default:
+none. See the README, &quot;Trust anchor&quot;.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="canonicalizationalgorithm"><code class="tsd-tag">Optional</code><span>canonicalization<wbr/>Algorithm</span><a href="#canonicalizationalgorithm" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">canonicalizationAlgorithm</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>Creation and analysis. The canonicalization of <code>ds:SignedInfo</code>, and the
+transform of the reference: <code>C14N</code> (default), <code>C14N_COMMENTS</code>,
+<code>EXC_C14N</code> or <code>EXC_C14N_COMMENTS</code>.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="checkcryptingalgorithms"><code class="tsd-tag">Optional</code><span>check<wbr/>Crypting<wbr/>Algorithms</span><a href="#checkcryptingalgorithms" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">checkCryptingAlgorithms</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>Analysis with a decryption key. Whether to check that the encryption
+algorithms of the token are the expected ones. Even when false, an
+algorithm out of the lists, or an undeclared CBC algorithm, is
+rejected. Default: true.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="checksigningalgorithms"><code class="tsd-tag">Optional</code><span>check<wbr/>Signing<wbr/>Algorithms</span><a href="#checksigningalgorithms" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">checkSigningAlgorithms</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
+<div class="tsd-comment tsd-typography"><p>Analysis. Whether to check that the signature, digest and
+canonicalization algorithms of the token are the expected ones. Even
+when false, an algorithm out of the lists is rejected. Default: true.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="cryptalgorithm"><code class="tsd-tag">Optional</code><span>crypt<wbr/>Algorithm</span><a href="#cryptalgorithm" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">cryptAlgorithm</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>Encryption (creation with an encryption certificate, analysis with a
+decryption key). The key transport algorithm: <code>RSA_OAEP_MGF1P</code>
+(default, and only one). RSA 1.5 is refused.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="digestalgorithm"><code class="tsd-tag">Optional</code><span>digest<wbr/>Algorithm</span><a href="#digestalgorithm" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">digestAlgorithm</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>Creation and analysis. The digest algorithm: <code>SHA1</code>, <code>SHA256</code>
+(default), <code>SHA384</code>, <code>SHA512</code> or <code>RIPEMD160</code>.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="expectedaudience"><code class="tsd-tag">Optional</code><span>expected<wbr/>Audience</span><a href="#expectedaudience" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">expectedAudience</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>Analysis. The audience of this receiver, which the token must be
+addressed to: <code>isSignatureValid()</code> returns false if the token names no
+audience or does not name this one. A token that names audiences is
+rejected when this option is not given. Compared as is, character case
+included. Default: none.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="expectedsubject"><code class="tsd-tag">Optional</code><span>expected<wbr/>Subject</span><a href="#expectedsubject" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">expectedSubject</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <span class="tsd-signature-type">string</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">[]</span><span class="tsd-signature-symbol">&gt;</span></div>
+<div class="tsd-comment tsd-typography"><p>Analysis. The subject the signing certificate must have: an object of
+the fields to check, as <code>getCertSubject()</code> gives them (<code>{ O: 'Lothbrok Ltd', OU: 'Signature Dept' }</code>), or the full Distinguished Name, as
+<code>getCertDN()</code> gives it. Character case is significant. It does not
+replace a trust anchor. Default: none.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sessionkeycipheringalgorithm"><code class="tsd-tag">Optional</code><span>session<wbr/>Key<wbr/>Ciphering<wbr/>Algorithm</span><a href="#sessionkeycipheringalgorithm" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">sessionKeyCipheringAlgorithm</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>Encryption (creation with an encryption certificate, analysis with a
+decryption key). The symmetric algorithm of the data: <code>AES128_GCM</code>,
+<code>AES192_GCM</code>, <code>AES256_GCM</code> (default), or the algorithms without
+integrity <code>TRIPLEDES_CBC</code>, <code>AES128_CBC</code>, <code>AES192_CBC</code>, <code>AES256_CBC</code>,
+which an analysis only decrypts when this option names them, even when
+<code>checkCryptingAlgorithms</code> is false.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="signaturealgorithm"><code class="tsd-tag">Optional</code><span>signature<wbr/>Algorithm</span><a href="#signaturealgorithm" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">signatureAlgorithm</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>Creation and analysis. The signature algorithm: <code>RSA_SHA1</code>,
+<code>RSA_SHA256</code> (default), <code>RSA_SHA384</code> or <code>RSA_SHA512</code>. A key transport
+algorithm is refused.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="signercertpath"><code class="tsd-tag">Optional</code><span>signer<wbr/>Cert<wbr/>Path</span><a href="#signercertpath" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">signerCertPath</span><span class="tsd-signature-symbol">?:</span> <a href="../types/core.PemSource.html" class="tsd-signature-type tsd-kind-type-alias">PemSource</a></div>
+<div class="tsd-comment tsd-typography"><p>Analysis. The certificate the token must be signed with (pinning), as a
+PEM file or content. Given alone, it is the trust anchor; given with
+<code>caCertPath</code>, both are required. Default: none.</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="validity"><code class="tsd-tag">Optional</code><span>validity</span><a href="#validity" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">validity</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
+<div class="tsd-comment tsd-typography"><p>Creation. The number of seconds after which the token is out of date,
+whatever the time to live the receiver gives to <code>isOutOfDate()</code>. The
+expiry date is written in the token, covered by the signature (see
+<code>getExpiry()</code>). Default: none (only the receiver sets the time to live).</p>
+</div></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="xmldsignsprefix"><code class="tsd-tag">Optional</code><span>xmldsig<wbr/>Ns<wbr/>Prefix</span><a href="#xmldsignsprefix" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">xmldsigNsPrefix</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>Creation. The namespace prefix of the elements of the signature; the
+empty string for none. Default: <code>'ds'</code>.</p>
+</div></section></section></details></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details">
+<details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
+<div><a href="#audience"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>audience</span></a><a href="#base64encode"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>base64<wbr/>Encode</span></a><a href="#cacertpath"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>ca<wbr/>Cert<wbr/>Path</span></a><a href="#canonicalizationalgorithm"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>canonicalization<wbr/>Algorithm</span></a><a href="#checkcryptingalgorithms"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>check<wbr/>Crypting<wbr/>Algorithms</span></a><a href="#checksigningalgorithms"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>check<wbr/>Signing<wbr/>Algorithms</span></a><a href="#cryptalgorithm"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>crypt<wbr/>Algorithm</span></a><a href="#digestalgorithm"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>digest<wbr/>Algorithm</span></a><a href="#expectedaudience"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>expected<wbr/>Audience</span></a><a href="#expectedsubject"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>expected<wbr/>Subject</span></a><a href="#sessionkeycipheringalgorithm"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>session<wbr/>Key<wbr/>Ciphering<wbr/>Algorithm</span></a><a href="#signaturealgorithm"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>signature<wbr/>Algorithm</span></a><a href="#signercertpath"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>signer<wbr/>Cert<wbr/>Path</span></a><a href="#validity"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>validity</span></a><a href="#xmldsignsprefix"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>xmldsig<wbr/>Ns<wbr/>Prefix</span></a></div></details></div></details></div>
+<div class="site-menu">
+<nav id="tsd-sidebar-links" class="tsd-navigation"><a href="https://github.com/webcoder31/ezxmldsig-js" class="tsd-nav-link">GitHub</a><a href="https://www.npmjs.com/package/@webcoder31/ezxmldsig" class="tsd-nav-link">npm</a></nav>
+<nav class="tsd-navigation"><a href="../modules.html">ezxmldsig for Node.js - v1.0.3</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

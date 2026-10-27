@@ -18,7 +18,7 @@
 
 import { constants, verify, type KeyObject } from 'node:crypto';
 
-import { TAG, childrenOf, decodeGeneralizedTime, decodeOid, decodeSmallInteger, readElement, readElements, type Element } from '../der.js';
+import { TAG, childrenOf, decodeGeneralizedTime, decodeOid, decodeSmallInteger, readElement, readElements, type Element } from '../core/der.js';
 import { CURVES, MIN_RSA_BITS } from './algorithms.js';
 
 export const OID_SHA256 = '2.16.840.1.101.3.4.2.1';

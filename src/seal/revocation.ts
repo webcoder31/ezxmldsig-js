@@ -36,7 +36,7 @@
  * archive cutoff).
  */
 
-import type { X509Cert } from '../x509.js';
+import type { X509Cert } from '../core/x509.js';
 import type { Revocation } from './crl.js';
 
 /**

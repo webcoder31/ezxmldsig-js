@@ -24,11 +24,11 @@ import { X509Certificate, createHash, verify, type KeyObject } from 'node:crypto
 
 import type { Document, Element, Node } from '@xmldom/xmldom';
 
-import { C14N, XMLDSIG_NS } from '../algorithms.js';
-import { canonicalize } from '../c14n.js';
-import { describeSource, readPem, type PemSource } from '../material.js';
-import { X509Cert, matchesName, type NameFields } from '../x509.js';
-import { loadXML } from '../xml.js';
+import { C14N, XMLDSIG_NS } from '../core/algorithms.js';
+import { canonicalize } from '../core/c14n.js';
+import { describeSource, readPem, type PemSource } from '../core/material.js';
+import { X509Cert, matchesName, type NameFields } from '../core/x509.js';
+import { loadXML } from '../core/xml.js';
 import * as alg from './algorithms.js';
 import { crlSource, readCrl } from './crl.js';
 import { ocspSources, readOcspResponse } from './ocsp.js';
@@ -38,6 +38,7 @@ import { ASICE_MIMETYPE, ASIC_NS, MANIFEST_NS, MANIFEST_PATH, SIGNED_PROPERTIES_
 import { verifyTimestampToken, type TimestampToken } from './timestamp.js';
 import { DEFAULT_ZIP_LIMITS, readZip, type ZipEntry, type ZipLimits } from './zip.js';
 
+/** The options of verifySeal(). */
 export interface VerifyOptions {
   /** The trusted CA certificates: the root of the signer, and the intermediate CAs if the seal does not embed them. */
   readonly caCertPath: PemSource | readonly PemSource[];
@@ -68,6 +69,7 @@ export type SealLevel = 'B' | 'T' | 'LT';
 
 /** A file the seal covers. */
 export interface SealedFile {
+  /** Its path in the container. */
   readonly name: string;
   /** The media type the signature gives it (DataObjectFormat). */
   readonly mimeType: string;

@@ -1,6 +1,6 @@
 /**
  * A DER writer and reader for the test helpers, written apart from
- * src/der.ts so that the structures the library is tested on do not come
+ * src/core/der.ts so that the structures the library is tested on do not come
  * from the code under test.
  */
 

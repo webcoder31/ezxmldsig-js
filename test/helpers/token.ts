@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { DOMParser, XMLSerializer, type Document, type Element } from '@xmldom/xmldom';
 import xpath from 'xpath';
 
-import { XMLDSigToken, type TokenData, type TokenOptions } from '../../dist/index.js';
+import { XMLDSigToken, type TokenData, type TokenOptions } from '../../dist/token/index.js';
 import { phpSkip, runPhp, type PhpResult } from './php.ts';
 
 export const CERTS = 'test/fixtures/certs';

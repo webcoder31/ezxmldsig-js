@@ -23,11 +23,11 @@ import { createHash } from 'node:crypto';
 
 import type { Document, Element } from '@xmldom/xmldom';
 
-import { XMLDSIG_NS } from '../algorithms.js';
-import { canonicalize } from '../c14n.js';
-import { escapeAttribute } from '../encoding.js';
-import { describeSource, readPem, type PemSource } from '../material.js';
-import { loadXML } from '../xml.js';
+import { XMLDSIG_NS } from '../core/algorithms.js';
+import { canonicalize } from '../core/c14n.js';
+import { escapeAttribute } from '../core/encoding.js';
+import { describeSource, readPem, type PemSource } from '../core/material.js';
+import { loadXML } from '../core/xml.js';
 import * as alg from './algorithms.js';
 import { XADES_NS } from './seal.js';
 import { buildTimestampRequest, readTimestampResponse, verifyTimestampToken } from './timestamp.js';
@@ -36,6 +36,7 @@ import { readZip, writeZip, type ZipEntry } from './zip.js';
 /** The canonicalization of ds:SignatureValue for its time-stamp. */
 export const TIMESTAMP_CANONICALIZATION = alg.EXC_C14N;
 
+/** The options of addSignatureTimestamp(). */
 export interface TimestampOptions {
   /** The trusted certificates of the time-stamping authority: its root, and its intermediate CAs if the token does not embed them. */
   readonly tsaCertPath: PemSource | readonly PemSource[];

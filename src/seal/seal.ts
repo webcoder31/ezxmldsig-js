@@ -16,12 +16,12 @@
 
 import { X509Certificate, createHash, createPrivateKey, createPublicKey, randomBytes, sign, type KeyObject } from 'node:crypto';
 
-import { XMLDSIG_NS } from '../algorithms.js';
-import { canonicalize } from '../c14n.js';
-import { escapeAttribute, escapeText } from '../encoding.js';
-import { describeSource, extractCertificates, readPem, type PemSource } from '../material.js';
-import { X509Cert } from '../x509.js';
-import { loadXML } from '../xml.js';
+import { XMLDSIG_NS } from '../core/algorithms.js';
+import { canonicalize } from '../core/c14n.js';
+import { escapeAttribute, escapeText } from '../core/encoding.js';
+import { describeSource, extractCertificates, readPem, type PemSource } from '../core/material.js';
+import { X509Cert } from '../core/x509.js';
+import { loadXML } from '../core/xml.js';
 import * as alg from './algorithms.js';
 import { writeZip } from './zip.js';
 
@@ -41,11 +41,13 @@ export const MANIFEST_PATH = 'META-INF/manifest.xml';
 export interface SealFile {
   /** Its path in the container, `/` separated, outside `META-INF/`. */
   readonly name: string;
+  /** Its bytes. */
   readonly content: Uint8Array;
   /** Its media type; by default, from the extension of its name (see MEDIA_TYPES). */
   readonly mimeType?: string;
 }
 
+/** The options of createSeal(). */
 export interface SealOptions {
   /** Certificates of the path of the signing certificate, to embed for the verifier (intermediate CAs). */
   readonly chain?: readonly PemSource[];

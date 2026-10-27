@@ -55,6 +55,14 @@ npm install @webcoder31/ezxmldsig
 
 ## What's in the box?
 
+The package has three branches, each imported from its own path:
+
+* `@webcoder31/ezxmldsig/token`: `XMLDSigToken`, the signed and encrypted XML tokens, and the identifiers of the algorithms of XML Encryption;
+* `@webcoder31/ezxmldsig/core`: what the tokens and the seals share, `X509Cert` and the identifiers of the algorithms of XML Signature;
+* `@webcoder31/ezxmldsig/seal`: **experimental**, seals of files (detached XAdES signatures in an ASiC-E container, at levels B, T and LT); its API may change in a minor version. Its design is in [design/seal.md](https://github.com/webcoder31/ezxmldsig-js/blob/main/design/seal.md).
+
+The package has no root: `import … from '@webcoder31/ezxmldsig'` fails, and the files of `dist/` cannot be imported by their path.
+
 **`XMLDSigToken`** creates and analyzes XML tokens:
 
 1. It builds a token from user data (named values, nested at will) and reads them back the same way.
@@ -86,7 +94,7 @@ Keys and certificates are in PEM format, given by the path of their file or by t
 ### Creating a signed XML token
 
 ```js
-import { XMLDSigToken } from '@webcoder31/ezxmldsig';
+import { XMLDSigToken } from '@webcoder31/ezxmldsig/token';
 
 const data = {
   name: 'Ragnar Lothbrok',
@@ -154,7 +162,7 @@ The analysis requires a trust anchor (see [Trust anchor](#trust-anchor)): withou
 **Restrict the trust anchor to the sender.** `caCertPath` accepts any certificate its CA issues. As soon as this CA also issues certificates to others than the expected sender, any of them can sign a token that `isSignatureValid()` accepts: add `expectedSubject` (the subject of the certificate of the sender), or pin the certificate of the sender with `signerCertPath`.
 
 ```js
-import { XMLDSigToken } from '@webcoder31/ezxmldsig';
+import { XMLDSigToken } from '@webcoder31/ezxmldsig/token';
 
 const ttl = 120;
 
@@ -342,7 +350,7 @@ Each factory takes an object of options as its last parameter. Each option appli
 | `cryptAlgorithm` | encryption: creation with an encryption certificate, analysis with a decryption key | string | `RSA_OAEP_MGF1P` |
 | `checkCryptingAlgorithms` | analysis with a decryption key | boolean | `true` |
 
-The algorithms are given with the constants of `XMLDSigToken` (e.g. `XMLDSigToken.RSA_SHA512`), also exported by the package (`import { RSA_SHA512 } from '@webcoder31/ezxmldsig'`), whose values are the URIs of the XMLDSIG and XML Encryption specifications. Each algorithm option only accepts the algorithms of its own list:
+The algorithms are given with the constants of `XMLDSigToken` (e.g. `XMLDSigToken.RSA_SHA512`), also exported by the package: those of XML Signature by its core (`import { RSA_SHA512 } from '@webcoder31/ezxmldsig/core'`), those of XML Encryption by its tokens (`import { AES256_GCM } from '@webcoder31/ezxmldsig/token'`), whose values are the URIs of the XMLDSIG and XML Encryption specifications. Each algorithm option only accepts the algorithms of its own list:
 
 * `canonicalizationAlgorithm`: `C14N`, `C14N_COMMENTS`, `EXC_C14N`, `EXC_C14N_COMMENTS`.
 * `signatureAlgorithm`: `RSA_SHA1`, `RSA_SHA256`, `RSA_SHA384`, `RSA_SHA512`.

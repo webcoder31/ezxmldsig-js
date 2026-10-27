@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.0
+
+The package is split into three branches, imported from their own paths: the tokens, the seals, and the core they share. It has no root any more.
+
+| 1.x | 2.0.0 |
+|---|---|
+| `import { XMLDSigToken } from '@webcoder31/ezxmldsig'` | `import { XMLDSigToken } from '@webcoder31/ezxmldsig/token'` |
+| `import { X509Cert } from '@webcoder31/ezxmldsig'` | `import { X509Cert } from '@webcoder31/ezxmldsig/core'` |
+| the types `TokenData`, `TokenValue`, `ReadTokenData`, `TokenOptions` | from `@webcoder31/ezxmldsig/token` |
+| the types `NameFields`, `PemSource` | from `@webcoder31/ezxmldsig/core` |
+| the identifiers of canonicalization, digest and signature (`C14N`, `SHA256`, `RSA_SHA256`…, `XMLDSIG_NS`) | from `@webcoder31/ezxmldsig/core` |
+| the identifiers of encryption (`AES256_GCM`, `RSA_OAEP_MGF1P`…, `XMLENC_NS`) | from `@webcoder31/ezxmldsig/token` |
+
+The tokens do not change: the same options, the same verdicts and error messages, the same interoperability with the PHP library. The constants of `XMLDSigToken` (`XMLDSigToken.RSA_SHA512`) remain.
+
+- `@webcoder31/ezxmldsig/seal`, **experimental**: seals of files, detached XAdES baseline signatures (ETSI EN 319 132-1) in an ASiC-E container (ETSI EN 319 162-1), at levels B, T (an RFC 3161 time-stamp) and LT (the CRLs and OCSP responses embedded), checked against DSS, the validator of the European Commission. The library sends no request: it builds the requests of time-stamps, CRLs and OCSP, and the caller sends them. Its API may change in a minor version of 2.x.
+- `X509Cert` gains `getTrustedChain()`, and `isTrustedBy()` takes an optional date and untrusted intermediate certificates; it gains accessors of the DER encoding, the public key, the serial number, the raw issuer and subject, the extensions, `isCA()` and `canSignCrls()`.
+- The core holds the identifiers of RSA-PSS (`RSA_PSS_SHA256`…) and ECDSA (`ECDSA_SHA256`…), which the seals use; the tokens keep their algorithms.
+
 ## 1.0.3
 
 Adds `getPrettyXML()` of the PHP library, and sends to the documentation site common to both libraries.

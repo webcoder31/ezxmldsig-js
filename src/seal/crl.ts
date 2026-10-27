@@ -18,8 +18,8 @@
  * know, make the CRL unusable rather than partly read.
  */
 
-import { TAG, childrenOf, decodeBoolean, decodeOid, decodeSmallInteger, decodeUnsigned, readElement, reencode, type Element } from '../der.js';
-import type { X509Cert } from '../x509.js';
+import { TAG, childrenOf, decodeBoolean, decodeOid, decodeSmallInteger, decodeUnsigned, readElement, reencode, type Element } from '../core/der.js';
+import type { X509Cert } from '../core/x509.js';
 import { decodeTime, sequenceOf, verifySignature } from './pkix.js';
 import type { RevocationSource } from './revocation.js';
 

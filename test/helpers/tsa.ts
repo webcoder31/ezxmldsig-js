@@ -1,6 +1,6 @@
 /**
  * A time-stamping authority for the tests (RFC 3161), written apart from
- * src/der.ts and src/seal/timestamp.ts so that the tokens the library is
+ * src/core/der.ts and src/seal/timestamp.ts so that the tokens the library is
  * tested on do not come from the code under test. Every field can be set,
  * so that each test builds one fault. The authority of
  * test/fixtures/seal/certs/tsa.cert.pem signs by default, with RSA PKCS#1

@@ -37,10 +37,10 @@
  * asks its responder.
  */
 
-import { TAG, childrenOf, decodeOid, readElement, readElements } from '../der.js';
-import type { PemSource } from '../material.js';
-import type { X509Cert } from '../x509.js';
-import { loadXML } from '../xml.js';
+import { TAG, childrenOf, decodeOid, readElement, readElements } from '../core/der.js';
+import type { PemSource } from '../core/material.js';
+import type { X509Cert } from '../core/x509.js';
+import { loadXML } from '../core/xml.js';
 import { locate } from './extend.js';
 import { buildOcspRequest } from './ocsp.js';
 import type { RevocationSource } from './revocation.js';
@@ -52,6 +52,7 @@ const CRL_DISTRIBUTION_POINTS = '2.5.29.31';
 const AUTHORITY_INFO_ACCESS = '1.3.6.1.5.5.7.1.1';
 const ID_AD_OCSP = '1.3.6.1.5.5.7.48.1';
 
+/** The options of validationDataRequests(). */
 export interface ValidationDataOptions {
   /** The trusted CA certificates of the signer, as for verifySeal(). */
   readonly caCertPath: PemSource | readonly PemSource[];
@@ -59,6 +60,7 @@ export interface ValidationDataOptions {
   readonly tsaCertPath: PemSource | readonly PemSource[];
 }
 
+/** The options of addValidationData(): at least one of crls and ocspResponses. */
 export interface AddValidationDataOptions extends ValidationDataOptions {
   /** The CRLs, in DER or PEM, fetched from the URLs validationDataRequests() lists. */
   readonly crls?: readonly Uint8Array[];
@@ -68,6 +70,7 @@ export interface AddValidationDataOptions extends ValidationDataOptions {
 
 /** A CRL to fetch: for a certificate, from the URLs of its CRL distribution points. */
 export interface CrlRequest {
+  /** The certificate whose status the CRL tells. */
   readonly certificate: X509Cert;
   /** Its issuer, whose CRL it is. */
   readonly issuer: X509Cert;
@@ -77,7 +80,9 @@ export interface CrlRequest {
 
 /** An OCSP request to send: for a certificate, to the responders its authority information access names. */
 export interface OcspRequest {
+  /** The certificate whose status the response tells. */
   readonly certificate: X509Cert;
+  /** Its issuer, which signs the response or delegates a responder. */
   readonly issuer: X509Cert;
   /** The http and https URLs of its OCSP responders. */
   readonly urls: readonly string[];
@@ -95,7 +100,12 @@ export interface OcspRequest {
  *
  * @throws {Error} If the seal is not valid, revocation aside.
  */
-export function validationDataRequests(container: Uint8Array, options: ValidationDataOptions): { crls: CrlRequest[]; ocsp: OcspRequest[] } {
+export function validationDataRequests(container: Uint8Array, options: ValidationDataOptions): {
+  /** The CRLs to fetch, one per certificate. */
+  crls: CrlRequest[];
+  /** The OCSP requests to send, one per certificate that names a responder. */
+  ocsp: OcspRequest[];
+} {
   const inspected = inspect(container, { ...options, revocation: false });
   const crls: CrlRequest[] = [];
   const ocsp: OcspRequest[] = [];

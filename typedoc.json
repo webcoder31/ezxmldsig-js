@@ -1,7 +1,9 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "src/index.ts"
+    "src/core/index.ts",
+    "src/token/index.ts",
+    "src/seal/index.ts"
   ],
   "tsconfig": "tsconfig.build.json",
   "out": "docs",

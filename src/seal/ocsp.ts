@@ -27,8 +27,8 @@
 
 import { createHash } from 'node:crypto';
 
-import { TAG, childrenOf, decodeGeneralizedTime, decodeOid, decodeSmallInteger, decodeUnsigned, encode, encodeOid, readElement, readElements, reencode, type Element } from '../der.js';
-import { X509Cert } from '../x509.js';
+import { TAG, childrenOf, decodeGeneralizedTime, decodeOid, decodeSmallInteger, decodeUnsigned, encode, encodeOid, readElement, readElements, reencode, type Element } from '../core/der.js';
+import { X509Cert } from '../core/x509.js';
 import type { Revocation } from './crl.js';
 import { sequenceOf, verifySignature } from './pkix.js';
 import type { RevocationSource } from './revocation.js';

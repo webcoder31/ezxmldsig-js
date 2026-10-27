@@ -11,7 +11,7 @@ import { before, describe, test } from 'node:test';
 
 import { DOMParser } from '@xmldom/xmldom';
 
-import { canonicalize } from '../../dist/c14n.js';
+import { canonicalize } from '../../dist/core/c14n.js';
 import * as alg from '../../dist/seal/algorithms.js';
 import { addSignatureTimestamp, timestampRequest } from '../../dist/seal/extend.js';
 import { createSeal, type SealOptions } from '../../dist/seal/seal.js';
