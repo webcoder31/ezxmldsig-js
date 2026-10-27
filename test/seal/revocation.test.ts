@@ -22,8 +22,12 @@ const CERTS = 'test/fixtures/seal/certs';
 const ROOT = `${CERTS}/root.cert.pem`;
 const TSA_ROOT = `${CERTS}/tsa-root.cert.pem`;
 const MINUTE = 60_000;
-const ago = (minutes: number) => new Date(Date.now() - minutes * MINUTE);
-const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000);
+// One origin for the relative times of this file: a seal time-stamped when
+// the file loads keeps its place among the CRLs and responses its tests make
+// later, seconds later under load.
+const NOW = Date.now();
+const ago = (minutes: number) => new Date(NOW - minutes * MINUTE);
+const secondsAgo = (seconds: number) => new Date(NOW - seconds * 1000);
 const reason = (code: number) => extension('2.5.29.21', false, der(0x0a, Buffer.from([code])));
 
 function seal(key = 'rsa3072'): Buffer {

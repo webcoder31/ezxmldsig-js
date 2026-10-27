@@ -26,7 +26,11 @@ const TSA_ROOT = `${CERTS}/tsa-root.cert.pem`;
 const SIGNATURE = 'META-INF/signatures001.xml';
 const PKI = 'http://pki.ezxmlseal.test';
 const TRUST = { caCertPath: ROOT, tsaCertPath: TSA_ROOT };
-const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000);
+// One origin for the relative times of this file: a seal time-stamped when
+// the file loads keeps its place among the CRLs and responses its tests make
+// later, seconds later under load.
+const NOW = Date.now();
+const secondsAgo = (seconds: number) => new Date(NOW - seconds * 1000);
 
 function seal(key = 'rsa3072'): Buffer {
   const intermediate = key === 'offline' ? 'intermediate-offline' : 'intermediate';

@@ -28,7 +28,11 @@ import { timestampResponse } from '../helpers/tsa.ts';
 
 const CERTS = 'test/fixtures/seal/certs';
 const TRUST = { caCertPath: `${CERTS}/root.cert.pem`, tsaCertPath: `${CERTS}/tsa-root.cert.pem` };
-const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000);
+// One origin for the relative times of this file: a seal time-stamped when
+// the file loads keeps its place among the CRLs and responses its tests make
+// later, seconds later under load.
+const NOW = Date.now();
+const secondsAgo = (seconds: number) => new Date(NOW - seconds * 1000);
 const SIGNER = 'RSA 3072 Seal Dept';
 
 function seal(key = 'rsa3072'): Buffer {
@@ -162,7 +166,7 @@ describe('level T: the status at the time of the time-stamp', () => {
 // produced since tells its status only if its responder keeps that of the
 // expired certificates, from an archive cutoff before the expiry.
 describe('level T: a signer expired since the time-stamp', () => {
-  const signer = expiredSigner(new Date(Date.now() - 3_600_000), secondsAgo(10));
+  const signer = expiredSigner(secondsAgo(3600), secondsAgo(10));
   after(() => signer.remove());
   const sealed = createSeal([{ name: 'contrat.pdf', content: Buffer.from('%PDF-1.4\n') }], signer.keyPath, signer.certPath, 'signKeyPassword', { chain: [`${CERTS}/intermediate.cert.pem`], signingTime: secondsAgo(20) });
   const container = addSignatureTimestamp(sealed, timestampResponse(timestampRequest(sealed), { time: secondsAgo(15) }), { tsaCertPath: TRUST.tsaCertPath });
@@ -177,7 +181,7 @@ describe('level T: a signer expired since the time-stamp', () => {
   });
 
   test('a response produced after the expiry, of an archive cutoff before it: valid', () => {
-    assert.equal(status({ archiveCutoff: new Date(Date.now() - 3_600_000) }), null);
+    assert.equal(status({ archiveCutoff: secondsAgo(3600) }), null);
   });
 
   test('a response produced after the expiry, of an archive cutoff after it', () => {
@@ -185,7 +189,7 @@ describe('level T: a signer expired since the time-stamp', () => {
   });
 
   test('a response of an archive cutoff before the expiry, the signer revoked before the time-stamp', () => {
-    assert.match(status({ archiveCutoff: new Date(Date.now() - 3_600_000), status: 'revoked', revocationTime: secondsAgo(17) }) ?? '', /, before the time-stamp/);
+    assert.match(status({ archiveCutoff: secondsAgo(3600), status: 'revoked', revocationTime: secondsAgo(17) }) ?? '', /, before the time-stamp/);
   });
 });
 
