@@ -360,7 +360,8 @@ export class X509Cert {
    * purpose "any").
    *
    * Every given certificate is trusted, and the chain is built from these
-   * certificates only, never from those of the system. A certificate is
+   * certificates only (and the `untrusted` ones), never from those of the
+   * system. A certificate is
    * taken as the issuer of another one when its subject is the issuer of the
    * other one (names compared in the canonical form of OpenSSL), when the
    * authority key identifier of the other one matches it, and when its key
@@ -368,7 +369,7 @@ export class X509Cert {
    *
    * - OpenSSL verifies the signature of each link (but the root's own);
    * - every certificate of the chain, the root included, is valid at the
-   *   current date;
+   *   current date (or at `at`);
    * - every issuer is a CA: basic constraints with "CA:TRUE" and, if it has
    *   a key usage, "keyCertSign"; the root may also be a CA by its key usage
    *   alone, or by being self-signed and of version 1;
@@ -387,10 +388,15 @@ export class X509Cert {
    *
    * @param caCerts The CA certificates: paths of PEM files, or PEM contents,
    *     each of which may hold several certificates.
+   * @param options `untrusted`: certificates the chain may be built with,
+   *     after the CA certificates, without being trusted (the intermediate
+   *     CAs a signature embeds): the root must still be one of the CA
+   *     certificates. `at`: the date the certificates must be valid at,
+   *     instead of the current date.
    * @returns True if the chain of the certificate has been verified.
    * @throws {Error} If a CA certificate file cannot be read.
    */
-  isTrustedBy(caCerts: PemSource | PemSource[]): boolean {
+  isTrustedBy(caCerts: PemSource | PemSource[], options: { untrusted?: readonly X509Cert[]; at?: Date } = {}): boolean {
     const sources: unknown[] = Array.isArray(caCerts) ? caCerts : [caCerts];
     if (sources.length === 0) {
       throw new Error('No CA certificate file to verify the certificate chain!');
@@ -415,8 +421,9 @@ export class X509Cert {
       }
     }
 
-    const chain = this.#buildChain(trusted);
-    return chain !== null && X509Cert.#verifyChain(chain);
+    const time = Math.floor((options.at ?? new Date()).getTime() / 1000);
+    const chain = this.#buildChain(trusted, options.untrusted ?? [], time);
+    return chain !== null && X509Cert.#verifyChain(chain, time);
   }
 
   /**
@@ -491,13 +498,15 @@ export class X509Cert {
   /**
    * Builds the chain of the certificate from the trusted certificates, as
    * OpenSSL does: from the certificate, take as issuer the first trusted
-   * certificate that may have issued it and is valid at the current date
-   * (or else the last one that may have issued it), until a self-signed
-   * certificate, which must be a trusted one.
+   * certificate, then the first untrusted one, that may have issued it and
+   * is valid at the given time (or else the last one that may have issued
+   * it), until a self-signed certificate, which must be a trusted one.
    *
+   * @param time The time of the verification, in seconds.
    * @returns The chain, from this certificate to its root, or null.
    */
-  #buildChain(trusted: X509Cert[]): X509Cert[] | null {
+  #buildChain(trusted: X509Cert[], untrusted: readonly X509Cert[], time: number): X509Cert[] | null {
+    const known = [...trusted, ...untrusted];
     const chain: X509Cert[] = [this];
     for (;;) {
       const last = chain[chain.length - 1] as X509Cert;
@@ -507,8 +516,8 @@ export class X509Cert {
       if (chain.length >= MAX_CHAIN_LENGTH) {
         return null;
       }
-      const candidates = trusted.filter((cert) => last.#mayBeIssuedBy(cert));
-      const issuer = candidates.find((cert) => cert.#isValidNow()) ?? candidates[candidates.length - 1];
+      const candidates = known.filter((cert) => last.#mayBeIssuedBy(cert));
+      const issuer = candidates.find((cert) => cert.#isValidAt(time)) ?? candidates[candidates.length - 1];
       if (issuer === undefined) {
         return null;
       }
@@ -520,8 +529,7 @@ export class X509Cert {
    * Verifies a chain built by `#buildChain()`, as OpenSSL does (see
    * `isTrustedBy()`).
    */
-  static #verifyChain(chain: X509Cert[]): boolean {
-    const now = Math.floor(Date.now() / 1000);
+  static #verifyChain(chain: X509Cert[], now: number): boolean {
     let pathLength = 0;
     for (let i = 0; i < chain.length; i++) {
       const cert = chain[i] as X509Cert;
@@ -611,11 +619,10 @@ export class X509Cert {
     return sameName(this.#issuer, this.#subject);
   }
 
-  /** Indicates whether the certificate is valid at the current date, as
+  /** Indicates whether the certificate is valid at a time (in seconds), as
   OpenSSL tells it: it is no longer valid at its very date of expiry. */
-  #isValidNow(): boolean {
-    const now = Math.floor(Date.now() / 1000);
-    return now >= seconds(this.#x509.validFromDate) && now < seconds(this.#x509.validToDate);
+  #isValidAt(time: number): boolean {
+    return time >= seconds(this.#x509.validFromDate) && time < seconds(this.#x509.validToDate);
   }
 
   /**
@@ -861,4 +868,12 @@ function seconds(date: Date): number {
 
 function formatDate(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/** Indicates whether a name holds the expected fields: each with the very
+same value, character case included; a repeated field is an array of its
+values. */
+export function matchesName(name: NameFields, expected: Record<string, string | string[]>): boolean {
+  return Object.entries(expected).every(([key, value]) =>
+    Object.hasOwn(name, key) && JSON.stringify(name[key]) === JSON.stringify(value));
 }

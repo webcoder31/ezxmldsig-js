@@ -30,7 +30,7 @@ import {
   loadTrustOptions,
   type TokenOptions,
 } from './options.js';
-import { X509Cert, type NameFields } from './x509.js';
+import { X509Cert, type NameFields, matchesName } from './x509.js';
 import { loadXML, parseFragment } from './xml.js';
 import { decryptKey, decryptSymmetric, encryptKey, encryptSymmetric, generateSessionKey } from './xmlenc.js';
 
@@ -1670,12 +1670,4 @@ function signedInfoPrefixList(method: Element): string[] | null {
     }
   }
   return prefixes;
-}
-
-/** Indicates whether a name holds the expected fields: each with the very
-same value, character case included; a repeated field is an array of its
-values. */
-function matchesName(name: NameFields, expected: Record<string, string | string[]>): boolean {
-  return Object.entries(expected).every(([key, value]) =>
-    Object.hasOwn(name, key) && JSON.stringify(name[key]) === JSON.stringify(value));
 }

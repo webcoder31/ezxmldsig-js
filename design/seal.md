@@ -152,6 +152,8 @@ seal.getSigningTime();     // the claimed time (SigningTime)
 seal.getTimestampTime();   // the proven time (level T), or null
 seal.getFiles();           // [{ name, mimeType }]: only the files the seal covers
 seal.getError();           // why it is not valid
+seal.getSigningCertificate(); // the X509Cert of the signer
+seal.isRevocationChecked();   // false when verified with revocation: false
 ```
 
 The API follows the conventions of `XMLDSigToken`: synchronous, files given as paths or contents (`PemSource`), trust given by `caCertPath`, `signerCertPath` and `expectedSubject`, an error message rather than an exception for an invalid seal, an exception for a misuse.
@@ -162,7 +164,7 @@ The API follows the conventions of `XMLDSigToken`: synchronous, files given as p
 - **The date at which the certificates are checked:**
   - level T: the time of the time-stamp, which is proven; the certificate of the time-stamping authority is checked at the current date (level LT will lift this constraint);
   - level B: the current date. `SigningTime` is claimed by the signer and cannot be used to check a certificate: a holder of a leaked key could date a seal before the expiry of its certificate.
-- **Revocation is checked by default**, for the signing certificate, the CA certificates of its path (the trust anchor excepted) and the certificate of the time-stamping authority. The data come from the seal (level LT) or from the caller (`crls`, `ocspResponses`). A certificate without revocation data makes the seal invalid, as it makes it indeterminate for DSS. `revocation: false` turns the check off, for applications of our own whose CA publishes no CRL: the result then says so (`getRevocationChecked()` false), so that a seal checked without revocation is never taken for one checked with it.
+- **Revocation is checked by default**, for the signing certificate, the CA certificates of its path (the trust anchor excepted) and the certificate of the time-stamping authority. The data come from the seal (level LT) or from the caller (`crls`, `ocspResponses`). A certificate without revocation data makes the seal invalid, as it makes it indeterminate for DSS. `revocation: false` turns the check off, for applications of our own whose CA publishes no CRL: the result then says so (`isRevocationChecked()` false), so that a seal checked without revocation is never taken for one checked with it.
 - **The date of the revocation data**: at level T and LT, a CRL or an OCSP response counts only if it was issued after the time of the time-stamp, and the certificate must not be revoked before that time; at level B, the data must be current (the next update of a CRL not passed).
 - **CRLs and OCSP responses are signed**: their signature is verified, by the issuing CA or by a responder it delegated (`id-kp-OCSPSigning`), with the algorithm policy of the seals.
 - **The trust in the time-stamping authority** is declared by the verifier (`tsaCertPath`), as the trust in the signer is (`caCertPath`). A time-stamp of an authority the verifier does not trust makes the seal invalid, not a level B seal.

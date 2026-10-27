@@ -170,6 +170,31 @@ describe('isTrustedBy()', () => {
     assert.throws(() => cert.isTrustedBy([`${CERTS}/missing.pem`]), { message: `Cannot read CA certificate file! File: ${CERTS}/missing.pem` });
     assert.throws(() => cert.isTrustedBy([]), { message: 'No CA certificate file to verify the certificate chain!' });
   });
+
+  describe('untrusted certificates build the chain, without being trusted', () => {
+    const cert = load(`${CERTS}/sign.cert.pem`);
+    const intermediate = load(`${CERTS}/intermediate.cert.pem`);
+    const root = load(`${CERTS}/root.cert.pem`);
+
+    test('an untrusted intermediate links the certificate to a trusted root', () => {
+      assert.equal(cert.isTrustedBy(`${CERTS}/root.cert.pem`), false);
+      assert.equal(cert.isTrustedBy(`${CERTS}/root.cert.pem`, { untrusted: [intermediate] }), true);
+    });
+
+    test('an untrusted root does not anchor the chain', () => {
+      assert.equal(cert.isTrustedBy(`${CERTS}/intermediate.cert.pem`, { untrusted: [root] }), false);
+      assert.equal(cert.isTrustedBy(`${TRUST}/other-intermediate.cert.pem`, { untrusted: [intermediate, root] }), false);
+    });
+  });
+
+  test('the date of the verification can be given', () => {
+    const cert = load(`${CERTS}/sign.cert.pem`);
+    const validTo = new Date(cert.getValidTo());
+    assert.equal(cert.isTrustedBy(ANCHOR, { at: new Date(validTo.getTime() - 86_400_000) }), true);
+    assert.equal(cert.isTrustedBy(ANCHOR, { at: new Date(validTo.getTime() + 1000) }), false);
+    assert.equal(cert.isTrustedBy(ANCHOR, { at: new Date(new Date(cert.getValidFrom()).getTime() - 1000) }), false);
+    assert.equal(load(`${TRUST}/expired.cert.pem`).isTrustedBy(ANCHOR, { at: new Date('2020-06-01T00:00:00Z') }), false, 'the intermediate is not valid in 2020');
+  });
 });
 
 describe('isValidCA()', () => {
