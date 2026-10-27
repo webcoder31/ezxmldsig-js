@@ -23,56 +23,25 @@
  * returns.
  */
 
-import { X509Certificate, constants, createHash, verify, type KeyObject } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 import {
-  TAG, childrenOf, decodeBoolean, decodeGeneralizedTime, decodeOid, decodeSmallInteger, decodeUnsigned, encode, encodeInteger, encodeOid,
+  TAG, childrenOf, decodeGeneralizedTime, decodeOid, decodeSmallInteger, decodeUnsigned, encode, encodeInteger, encodeOid,
   readElement, readElements, reencode, type Element,
 } from '../der.js';
 import { X509Cert } from '../x509.js';
-import { CURVES, MIN_RSA_BITS } from './algorithms.js';
+import { OIDS_OF_DIGESTS, digestOf, sequenceOf, verifySignature } from './pkix.js';
 
 const OID = {
-  SHA256: '2.16.840.1.101.3.4.2.1',
-  SHA384: '2.16.840.1.101.3.4.2.2',
-  SHA512: '2.16.840.1.101.3.4.2.3',
   SIGNED_DATA: '1.2.840.113549.1.7.2',
   TST_INFO: '1.2.840.113549.1.9.16.1.4',
   CONTENT_TYPE: '1.2.840.113549.1.9.3',
   MESSAGE_DIGEST: '1.2.840.113549.1.9.4',
   SIGNING_CERTIFICATE: '1.2.840.113549.1.9.16.2.12',
   SIGNING_CERTIFICATE_V2: '1.2.840.113549.1.9.16.2.47',
-  RSA: '1.2.840.113549.1.1.1',
-  RSA_PSS: '1.2.840.113549.1.1.10',
-  RSA_SHA256: '1.2.840.113549.1.1.11',
-  RSA_SHA384: '1.2.840.113549.1.1.12',
-  RSA_SHA512: '1.2.840.113549.1.1.13',
-  ECDSA_SHA256: '1.2.840.10045.4.3.2',
-  ECDSA_SHA384: '1.2.840.10045.4.3.3',
-  ECDSA_SHA512: '1.2.840.10045.4.3.4',
-  MGF1: '1.2.840.113549.1.1.8',
   EXTENDED_KEY_USAGE: '2.5.29.37',
   TIME_STAMPING: '1.3.6.1.5.5.7.3.8',
 } as const;
-
-/** The digests of messages, imprints and signatures: their node:crypto name by OID. */
-const DIGEST_OIDS: Readonly<Record<string, string>> = {
-  [OID.SHA256]: 'sha256',
-  [OID.SHA384]: 'sha384',
-  [OID.SHA512]: 'sha512',
-};
-const OIDS_OF_DIGESTS: Readonly<Record<string, string>> = { sha256: OID.SHA256, sha384: OID.SHA384, sha512: OID.SHA512 };
-
-/** Signature algorithms of the token whose OID names the digest. */
-const SIGNATURES: Readonly<Record<string, { keyType: 'rsa' | 'ec'; hash: string | null }>> = {
-  [OID.RSA]: { keyType: 'rsa', hash: null },
-  [OID.RSA_SHA256]: { keyType: 'rsa', hash: 'sha256' },
-  [OID.RSA_SHA384]: { keyType: 'rsa', hash: 'sha384' },
-  [OID.RSA_SHA512]: { keyType: 'rsa', hash: 'sha512' },
-  [OID.ECDSA_SHA256]: { keyType: 'ec', hash: 'sha256' },
-  [OID.ECDSA_SHA384]: { keyType: 'ec', hash: 'sha384' },
-  [OID.ECDSA_SHA512]: { keyType: 'ec', hash: 'sha512' },
-};
 
 const PKI_STATUS = ['granted', 'grantedWithMods', 'rejection', 'waiting', 'revocationWarning', 'revocationNotification'];
 
@@ -141,6 +110,15 @@ export function readTimestampResponse(response: Buffer): Buffer {
  * @throws {Error} Why the token is not valid.
  */
 export function verifyTimestampToken(token: Buffer): TimestampToken {
+  try {
+    return readToken(token);
+  } catch (error) {
+    const message = (error as Error).message;
+    throw new Error(message.startsWith('Time-stamp: ') ? message : `Time-stamp: ${message}`);
+  }
+}
+
+function readToken(token: Buffer): TimestampToken {
   // ContentInfo: contentType signedData, [0] EXPLICIT SignedData.
   const [contentType, wrapped, ...extra] = sequenceOf(readElement(token), 'ContentInfo');
   if (contentType === undefined || decodeOid(contentType) !== OID.SIGNED_DATA || wrapped?.tag !== 0xa0 || extra.length > 0) {
@@ -165,7 +143,14 @@ export function verifyTimestampToken(token: Buffer): TimestampToken {
   const tstInfo = readTstInfo(eContent.content);
 
   // The certificates of the token: the one of the signer, and the chain.
-  const certs = certificates === undefined ? [] : readElements(certificates.content).filter((element) => element.tag === TAG.SEQUENCE).map(reencode);
+  let certs: X509Cert[];
+  try {
+    certs = certificates === undefined ? [] : readElements(certificates.content)
+      .filter((element) => element.tag === TAG.SEQUENCE)
+      .map((element) => new X509Cert(X509Cert.derToPem(reencode(element)) as string));
+  } catch {
+    throw new Error('Time-stamp: a certificate of the token cannot be read.');
+  }
 
   // The one signer.
   const signers = childrenOf(signerInfos, TAG.SET);
@@ -176,8 +161,8 @@ export function verifyTimestampToken(token: Buffer): TimestampToken {
   if (version === undefined || sid === undefined || digestAlgorithm === undefined || signedAttrs?.tag !== 0xa0 || signatureAlgorithm === undefined || signature?.tag !== TAG.OCTET_STRING || unsigned.some((u) => u.tag !== 0xa1)) {
     throw new Error('Time-stamp: malformed SignerInfo (the signed attributes are required).');
   }
-  const signerCertDer = certs.find((der) => identifies(sid, der));
-  if (signerCertDer === undefined) {
+  const certificate = certs.find((cert) => identifies(sid, cert));
+  if (certificate === undefined) {
     throw new Error('Time-stamp: the certificate of the authority is not in the token.');
   }
   const digest = digestOf(digestAlgorithm);
@@ -206,23 +191,14 @@ export function verifyTimestampToken(token: Buffer): TimestampToken {
   if (messageDigest.tag !== TAG.OCTET_STRING || !createHash(digest).update(eContent.content).digest().equals(messageDigest.content)) {
     throw new Error('Time-stamp: the TSTInfo has been altered (message digest mismatch).');
   }
-  checkSigningCertificate(attributes, signerCertDer);
+  checkSigningCertificate(attributes, certificate.getDer());
 
   // The signature, over the DER of the signed attributes as a SET.
-  let certificate: X509Cert;
-  let publicKey: KeyObject;
-  let chain: X509Cert[];
-  try {
-    certificate = new X509Cert(X509Cert.derToPem(signerCertDer) as string);
-    publicKey = new X509Certificate(signerCertDer).publicKey;
-    chain = certs.filter((der) => !der.equals(signerCertDer)).map((der) => new X509Cert(X509Cert.derToPem(der) as string));
-  } catch {
-    throw new Error('Time-stamp: a certificate of the token cannot be read.');
-  }
-  if (!verifySignature(signatureAlgorithm, digest, publicKey, encode(TAG.SET, signedAttrs.content), signature.content)) {
+  if (!verifySignature(signatureAlgorithm, digest, certificate.getPublicKey(), encode(TAG.SET, signedAttrs.content), signature.content)) {
     throw new Error('Time-stamp: the signature of the token is not valid.');
   }
-  if (!hasTimeStampingUsage(signerCertDer)) {
+  const chain = certs.filter((cert) => cert !== certificate);
+  if (!hasTimeStampingUsage(certificate)) {
     throw new Error('Time-stamp: the certificate of the authority does not have the extended key usage timeStamping alone, critical (RFC 3161, 2.3).');
   }
   return { ...tstInfo, certificate, chain };
@@ -283,125 +259,26 @@ function checkSigningCertificate(attributes: Map<string, Element[]>, certificate
 }
 
 /** Whether a SignerIdentifier names a certificate: issuerAndSerialNumber, or [0] subjectKeyIdentifier. */
-function identifies(sid: Element, der: Buffer): boolean {
+function identifies(sid: Element, certificate: X509Cert): boolean {
   if (sid.tag === TAG.SEQUENCE) {
     const [issuer, serial] = readElements(sid.content);
-    const tbs = sequenceOf(sequenceOf(readElement(der), 'Certificate')[0] as Element, 'TBSCertificate');
-    const offset = tbs[0]?.tag === 0xa0 ? 1 : 0;
     return issuer !== undefined && serial !== undefined
-      && reencode(issuer).equals(reencode(tbs[offset + 2] as Element))
-      && decodeUnsigned(serial).equals(decodeUnsigned(tbs[offset] as Element));
+      && reencode(issuer).equals(certificate.getRawIssuer())
+      && decodeUnsigned(serial).equals(certificate.getSerialNumber());
   }
   if (sid.tag === 0x80) {
-    return subjectKeyIdentifier(der)?.equals(sid.content) ?? false;
+    const extension = certificate.getExtension('2.5.29.14');
+    return extension !== null && readElement(extension.value).content.equals(sid.content);
   }
   return false;
 }
 
-/** The subject key identifier of a certificate, or null. */
-function subjectKeyIdentifier(der: Buffer): Buffer | null {
-  const extension = extensionOf(der, '2.5.29.14');
-  return extension === null ? null : readElement(extension.value).content;
-}
-
-/** An extension of a certificate: its criticality and its value (the content of its OCTET STRING), or null. */
-function extensionOf(der: Buffer, oid: string): { critical: boolean; value: Buffer } | null {
-  const tbs = sequenceOf(sequenceOf(readElement(der), 'Certificate')[0] as Element, 'TBSCertificate');
-  const extensions = tbs.find((element) => element.tag === 0xa3);
-  if (extensions === undefined) {
-    return null;
-  }
-  for (const extension of childrenOf(readElement(extensions.content), TAG.SEQUENCE)) {
-    const fields = sequenceOf(extension, 'Extension');
-    if (decodeOid(fields[0] as Element) === oid) {
-      const critical = fields.length === 3 ? decodeBoolean(fields[1] as Element) : false;
-      const value = fields[fields.length - 1] as Element;
-      return { critical, value: value.content };
-    }
-  }
-  return null;
-}
-
 /** RFC 3161, 2.3: the certificate of the authority has one extended key usage, timeStamping, critical. */
-function hasTimeStampingUsage(der: Buffer): boolean {
-  const extension = extensionOf(der, OID.EXTENDED_KEY_USAGE);
+function hasTimeStampingUsage(certificate: X509Cert): boolean {
+  const extension = certificate.getExtension(OID.EXTENDED_KEY_USAGE);
   if (extension === null || !extension.critical) {
     return false;
   }
   const usages = childrenOf(readElement(extension.value), TAG.SEQUENCE).map(decodeOid);
   return usages.length === 1 && usages[0] === OID.TIME_STAMPING;
-}
-
-/** Verifies the signature of the token, with the algorithms and key sizes of the seals. */
-function verifySignature(algorithm: Element, digest: string, key: KeyObject, data: Buffer, signature: Buffer): boolean {
-  const [oidElement, parameters] = sequenceOf(algorithm, 'AlgorithmIdentifier');
-  const oid = decodeOid(oidElement as Element);
-  if (key.asymmetricKeyType === 'rsa' && (key.asymmetricKeyDetails?.modulusLength ?? 0) < MIN_RSA_BITS) {
-    throw new Error(`Time-stamp: the RSA key of the authority has less than ${MIN_RSA_BITS} bits.`);
-  }
-  if (key.asymmetricKeyType === 'ec' && CURVES[key.asymmetricKeyDetails?.namedCurve ?? ''] === undefined) {
-    throw new Error('Time-stamp: the EC key of the authority is not on P-256, P-384 or P-521.');
-  }
-  if (oid === OID.RSA_PSS) {
-    const pss = readPssParameters(parameters);
-    if (key.asymmetricKeyType !== 'rsa' || pss.hash !== digest) {
-      throw new Error('Time-stamp: unsupported RSASSA-PSS parameters.');
-    }
-    return verify(digest, data, { key, padding: constants.RSA_PKCS1_PSS_PADDING, saltLength: pss.saltLength }, signature);
-  }
-  const scheme = SIGNATURES[oid];
-  if (scheme === undefined) {
-    throw new Error(`Time-stamp: unsupported signature algorithm ${oid}.`);
-  }
-  if (scheme.keyType !== key.asymmetricKeyType || (scheme.hash !== null && scheme.hash !== digest)) {
-    throw new Error('Time-stamp: the signature algorithm does not suit the key or the digest of the token.');
-  }
-  return verify(digest, data, scheme.keyType === 'rsa' ? { key, padding: constants.RSA_PKCS1_PADDING } : key, signature);
-}
-
-/** RSASSA-PSS-params (RFC 4055): the digest, MGF1 with the same digest, the salt length, trailer 1. */
-function readPssParameters(parameters: Element | undefined): { hash: string; saltLength: number } {
-  if (parameters === undefined) {
-    throw new Error('Time-stamp: RSASSA-PSS without parameters.');
-  }
-  let hash = 'sha1';
-  let mgfHash = 'sha1';
-  let saltLength = 20;
-  for (const field of childrenOf(parameters, TAG.SEQUENCE)) {
-    const inner = readElement(field.content);
-    if (field.tag === 0xa0) {
-      hash = digestOf(inner);
-    } else if (field.tag === 0xa1) {
-      const [mgf, mgfParameters] = sequenceOf(inner, 'MaskGenAlgorithm');
-      if (decodeOid(mgf as Element) !== OID.MGF1 || mgfParameters === undefined) {
-        throw new Error('Time-stamp: unsupported mask generation function.');
-      }
-      mgfHash = digestOf(mgfParameters);
-    } else if (field.tag === 0xa2) {
-      saltLength = decodeSmallInteger(inner);
-    } else if (field.tag !== 0xa3 || decodeSmallInteger(inner) !== 1) {
-      throw new Error('Time-stamp: unsupported RSASSA-PSS parameters.');
-    }
-  }
-  if (mgfHash !== hash) {
-    throw new Error('Time-stamp: unsupported RSASSA-PSS parameters.');
-  }
-  return { hash, saltLength };
-}
-
-/** A digest AlgorithmIdentifier: SHA-256, SHA-384 or SHA-512, parameters absent or NULL. */
-function digestOf(algorithm: Element): string {
-  const [oid, parameters, ...rest] = sequenceOf(algorithm, 'AlgorithmIdentifier');
-  const digest = DIGEST_OIDS[decodeOid(oid as Element)];
-  if (digest === undefined || rest.length > 0 || (parameters !== undefined && (parameters.tag !== 0x05 || parameters.content.length !== 0))) {
-    throw new Error(`Time-stamp: unsupported digest algorithm ${decodeOid(oid as Element)}.`);
-  }
-  return digest;
-}
-
-function sequenceOf(element: Element, what: string): Element[] {
-  if (element.tag !== TAG.SEQUENCE) {
-    throw new Error(`Time-stamp: malformed ${what}.`);
-  }
-  return readElements(element.content);
 }

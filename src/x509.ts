@@ -8,7 +8,7 @@
  * http://www.cecill.info
  */
 
-import { X509Certificate, createHash } from 'node:crypto';
+import { X509Certificate, createHash, type KeyObject } from 'node:crypto';
 
 import {
   TAG,
@@ -17,6 +17,7 @@ import {
   decodeBoolean,
   decodeOid,
   decodeSmallInteger,
+  encode,
   readElement,
   readElements,
   type Element,
@@ -169,6 +170,7 @@ const KEY_USAGE_BITS = {
   digitalSignature: 0,
   nonRepudiation: 1,
   keyCertSign: 5,
+  cRLSign: 6,
 } as const;
 
 /** The deepest chain OpenSSL builds by default. */
@@ -397,6 +399,16 @@ export class X509Cert {
    * @throws {Error} If a CA certificate file cannot be read.
    */
   isTrustedBy(caCerts: PemSource | PemSource[], options: { untrusted?: readonly X509Cert[]; at?: Date } = {}): boolean {
+    return this.getTrustedChain(caCerts, options) !== null;
+  }
+
+  /**
+   * The chain `isTrustedBy()` verifies, from this certificate to its root,
+   * or null if the certificate is not trusted.
+   *
+   * @throws {Error} If a CA certificate file cannot be read.
+   */
+  getTrustedChain(caCerts: PemSource | PemSource[], options: { untrusted?: readonly X509Cert[]; at?: Date } = {}): X509Cert[] | null {
     const sources: unknown[] = Array.isArray(caCerts) ? caCerts : [caCerts];
     if (sources.length === 0) {
       throw new Error('No CA certificate file to verify the certificate chain!');
@@ -410,20 +422,70 @@ export class X509Cert {
       // A file OpenSSL cannot load as a whole trusts nothing.
       const blocks = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
       if (blocks === null) {
-        return false;
+        return null;
       }
       for (const block of blocks) {
         try {
           trusted.push(new X509Cert(block));
         } catch {
-          return false;
+          return null;
         }
       }
     }
 
     const time = Math.floor((options.at ?? new Date()).getTime() / 1000);
     const chain = this.#buildChain(trusted, options.untrusted ?? [], time);
-    return chain !== null && X509Cert.#verifyChain(chain, time);
+    return chain !== null && X509Cert.#verifyChain(chain, time) ? chain : null;
+  }
+
+  /** The DER encoding of the certificate. */
+  getDer(): Buffer {
+    return Buffer.from(this.#x509.raw);
+  }
+
+  /** The public key of the certificate. */
+  getPublicKey(): KeyObject {
+    return this.#x509.publicKey;
+  }
+
+  /** The serial number, as unsigned big-endian bytes. */
+  getSerialNumber(): Buffer {
+    const serial = this.#serial;
+    return serial.length > 1 && serial[0] === 0 ? Buffer.from(serial.subarray(1)) : Buffer.from(serial);
+  }
+
+  /** The DER encoding of the issuer name, as a CRL names its issuer. */
+  getRawIssuer(): Buffer {
+    return this.#rawName(2);
+  }
+
+  /** The DER encoding of the subject name. */
+  getRawSubject(): Buffer {
+    return this.#rawName(4);
+  }
+
+  /** An extension, by its OID: its criticality and its value (the content of its OCTET STRING), or null. */
+  getExtension(oid: string): { critical: boolean; value: Buffer } | null {
+    const extension = this.#extensions.get(oid);
+    return extension === undefined ? null : { critical: extension.critical, value: Buffer.from(extension.value) };
+  }
+
+  /** Whether the key usage of the certificate, if it has one, allows it to sign CRLs. */
+  canSignCrls(): boolean {
+    return this.#keyUsage === null || this.#keyUsage[KEY_USAGE_BITS.cRLSign] === true;
+  }
+
+  /** Whether the certificate is a CA by its basic constraints. */
+  isCA(): boolean {
+    return this.#basicConstraints?.ca === true;
+  }
+
+  /** The DER of a field of the TBSCertificate (serialNumber 0, signature 1, issuer 2, validity 3, subject 4), the version left out. */
+  #rawName(index: number): Buffer {
+    const tbs = childrenOf(childrenOf(readElement(this.#x509.raw), TAG.SEQUENCE)[0] as Element, TAG.SEQUENCE);
+    const fields = tbs[0]?.tag === 0xa0 ? tbs.slice(1) : tbs;
+    const field = fields[index] as Element;
+    return encode(field.tag, field.content);
   }
 
   /**

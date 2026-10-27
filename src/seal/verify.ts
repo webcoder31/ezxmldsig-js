@@ -30,7 +30,9 @@ import { describeSource, readPem, type PemSource } from '../material.js';
 import { X509Cert, matchesName, type NameFields } from '../x509.js';
 import { loadXML } from '../xml.js';
 import * as alg from './algorithms.js';
+import { readCrl, type Crl } from './crl.js';
 import { imprintOf } from './extend.js';
+import { checkRevocation } from './revocation.js';
 import { ASICE_MIMETYPE, ASIC_NS, MANIFEST_NS, MANIFEST_PATH, SIGNED_PROPERTIES_TYPE, XADES_NS } from './seal.js';
 import { verifyTimestampToken, type TimestampToken } from './timestamp.js';
 import { DEFAULT_ZIP_LIMITS, readZip, type ZipEntry, type ZipLimits } from './zip.js';
@@ -48,6 +50,8 @@ export interface VerifyOptions {
    * without, which `isRevocationChecked()` then tells.
    */
   readonly revocation?: boolean;
+  /** CRLs, in DER or PEM, for the certificates of the signer and of the time-stamping authority. */
+  readonly crls?: readonly Uint8Array[];
   /** The limits of the reading of the container. */
   readonly limits?: ZipLimits;
 }
@@ -147,10 +151,20 @@ export function verifySeal(container: Uint8Array, options: VerifyOptions): SealV
   if (expectedSubject !== undefined && (expectedSubject === null || (typeof expectedSubject !== 'string' && typeof expectedSubject !== 'object') || expectedSubject === '')) {
     throw new Error("Seal verification: invalid option 'expectedSubject'.");
   }
-  const checkRevocation = options.revocation ?? true;
-  if (typeof checkRevocation !== 'boolean') {
+  const revocation = options.revocation ?? true;
+  if (typeof revocation !== 'boolean') {
     throw new Error("Seal verification: invalid option 'revocation'.");
   }
+  if (options.crls !== undefined && (!Array.isArray(options.crls) || options.crls.some((crl) => !(crl instanceof Uint8Array)))) {
+    throw new Error("Seal verification: invalid option 'crls': an array of CRLs (Uint8Array).");
+  }
+  const crls: Crl[] = (options.crls ?? []).map((crl) => {
+    try {
+      return readCrl(crl);
+    } catch (error) {
+      throw new Error(`Seal verification: a CRL cannot be used. ${(error as Error).message}`);
+    }
+  });
 
   let signer: X509Cert | null = null;
   let signingTime: Date | null = null;
@@ -165,11 +179,12 @@ export function verifySeal(container: Uint8Array, options: VerifyOptions): SealV
     // certificate of the authority is checked at the current date (level LT
     // will embed what checks it at the time of the time-stamp).
     let timestampTime: Date | null = null;
+    let tsaChain: X509Cert[] | null = null;
     if (signature.timestamp !== null) {
       if (tsaCerts === null) {
         invalid("The seal is time-stamped: the option 'tsaCertPath' is needed to trust its time-stamping authority.");
       }
-      timestampTime = checkTimestamp(signature.timestamp, tsaCerts);
+      ({ time: timestampTime, chain: tsaChain } = checkTimestamp(signature.timestamp, tsaCerts));
     }
 
     // Without time-stamp, the trust in the signer is checked at the current
@@ -179,7 +194,8 @@ export function verifySeal(container: Uint8Array, options: VerifyOptions): SealV
     if (!certificate.canSign()) {
       invalid('The key usage of the signing certificate does not allow signing.');
     }
-    if (!certificate.isTrustedBy(caCerts, { untrusted: signature.chain, ...(timestampTime === null ? {} : { at: timestampTime }) })) {
+    const chain = certificate.getTrustedChain(caCerts, { untrusted: signature.chain, ...(timestampTime === null ? {} : { at: timestampTime }) });
+    if (chain === null) {
       invalid(`The signing certificate is not trusted: no valid chain up to a trusted CA certificate${timestampTime === null ? '' : ' at the time of the time-stamp'}.`);
     }
     if (expectedSubject !== undefined) {
@@ -188,10 +204,15 @@ export function verifySeal(container: Uint8Array, options: VerifyOptions): SealV
         invalid('The subject of the signing certificate is not the expected one.');
       }
     }
-    if (checkRevocation) {
-      invalid('No revocation data for the signing certificate (the option revocation: false verifies the seal without).');
+    if (revocation) {
+      const now = new Date();
+      const error = checkRevocation(chain, crls, timestampTime === null ? { kind: 'current', now } : { kind: 'timestamp', time: timestampTime, now })
+        ?? (tsaChain === null ? null : checkRevocation(tsaChain, crls, { kind: 'current', now }));
+      if (error !== null) {
+        invalid(`${error} (the option revocation: false verifies the seal without revocation.)`);
+      }
     }
-    return new SealVerification({ error: null, files: signature.files, signingTime, signer, revocationChecked: false, timestampTime });
+    return new SealVerification({ error: null, files: signature.files, signingTime, signer, revocationChecked: revocation, timestampTime });
   } catch (error) {
     if (error instanceof InvalidSeal) {
       return new SealVerification({ error: error.message, signingTime, signer });
@@ -214,8 +235,8 @@ function readCertificates(source: unknown, name: string): PemSource[] {
   });
 }
 
-/** The signature time-stamp: a valid token, over this signature, of a trusted authority. Returns its time. */
-function checkTimestamp(timestamp: ReadTimestamp, tsaCerts: PemSource[]): Date {
+/** The signature time-stamp: a valid token, over this signature, of a trusted authority. Returns its time, and the chain of the authority. */
+function checkTimestamp(timestamp: ReadTimestamp, tsaCerts: PemSource[]): { time: Date; chain: X509Cert[] } {
   let token: TimestampToken;
   try {
     token = verifyTimestampToken(timestamp.token);
@@ -231,10 +252,11 @@ function checkTimestamp(timestamp: ReadTimestamp, tsaCerts: PemSource[]): Date {
   if (!imprint.equals(token.imprint)) {
     invalid('The signature time-stamp is not over the signature value of this seal.');
   }
-  if (!token.certificate.isTrustedBy(tsaCerts, { untrusted: token.chain })) {
+  const chain = token.certificate.getTrustedChain(tsaCerts, { untrusted: token.chain });
+  if (chain === null) {
     invalid('The time-stamping authority is not trusted.');
   }
-  return token.time;
+  return { time: token.time, chain };
 }
 
 /** The layout of the container (EN 319 162-1, 4.4.3.2, Table 5, A.1). */

@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import { X509Certificate, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 
 import { DOMParser, type Document, type Element } from '@xmldom/xmldom';
 import xpath from 'xpath';
@@ -16,7 +16,7 @@ import xpath from 'xpath';
 import * as alg from '../../dist/seal/algorithms.js';
 import { createSeal, type SealFile, type SealOptions } from '../../dist/seal/seal.js';
 import { readZip } from '../../dist/seal/zip.js';
-import { dssSkip, validateWithDss } from '../helpers/dss.ts';
+import { dssSkip, publishTestCrls, validateWithDss } from '../helpers/dss.ts';
 
 const CERTS = 'test/fixtures/seal/certs';
 const PASSWORD = 'signKeyPassword';
@@ -194,6 +194,7 @@ describe('misuses are refused', () => {
 });
 
 describe('validation by DSS', { skip: dssSkip }, () => {
+  before(publishTestCrls);
   const expected = ['contrat final.pdf', "notes d'été.md", 'docs/a#b%c.txt', 'data.bin'];
   const seals: [string, () => Buffer][] = [
     ['RSA 3072, RSA-PSS', () => seal('rsa3072', { signingTime: new Date() })],
@@ -214,9 +215,8 @@ describe('validation by DSS', { skip: dssSkip }, () => {
       assert.equal(signature?.references.length, expected.length + 1);
       assert.ok(signature?.references.every((r) => r.found && r.intact));
       assert.deepEqual(signature?.trusted, ['CN=Lothbrok Seal Test,OU=Seal Root CA,O=Lothbrok Ltd,C=DK']);
-      // Until the test PKI answers at pki.ezxmlseal.test, the only errors are those of the missing revocation data.
-      assert.equal(signature?.indication, 'INDETERMINATE');
-      assert.deepEqual(signature?.errors, ['The certificate validation is not conclusive!', 'No revocation data found for the certificate!']);
+      assert.equal(signature?.indication, 'TOTAL_PASSED');
+      assert.deepEqual(signature?.errors, []);
     });
   }
 });

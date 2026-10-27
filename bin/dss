@@ -17,7 +17,9 @@
 # directory of Tomcat, which is on the class path of DSS:
 # dss-custom.properties names a keystore of trust anchors, which holds the
 # roots of test/fixtures/seal/certs/ (root, and tsa-root). Each start
-# writes it again: after bin/gen-seal-test-certs, run bin/dss start.
+# writes it again: after bin/gen-seal-test-certs, run bin/dss start. The
+# CRLs and OCSP responses DSS fetches are kept one second in its cache, not
+# until their next update: a test that publishes another CRL is then seen.
 #
 # A second container serves test/.cache/dss/pki/ over HTTP at the name
 # pki.ezxmlseal.test, on the Docker network of DSS: the CRL distribution
@@ -81,6 +83,10 @@ configure() {
 trusted.source.keystore.type = PKCS12
 trusted.source.keystore.filename = test-trust.p12
 trusted.source.keystore.password = $KEYSTORE_PASSWORD
+cache.crl.default.next.update = 1
+cache.crl.max.next.update = 1
+cache.ocsp.default.next.update = 1
+cache.ocsp.max.next.update = 1
 EOF
 }
 

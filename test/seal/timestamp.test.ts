@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 
 import { DOMParser } from '@xmldom/xmldom';
 
@@ -17,7 +17,7 @@ import { addSignatureTimestamp, timestampRequest } from '../../dist/seal/extend.
 import { createSeal, type SealOptions } from '../../dist/seal/seal.js';
 import { verifySeal, type VerifyOptions } from '../../dist/seal/verify.js';
 import { readZip, writeZip } from '../../dist/seal/zip.js';
-import { dssSkip, validateWithDss } from '../helpers/dss.ts';
+import { dssSkip, publishTestCrls, validateWithDss } from '../helpers/dss.ts';
 import { opensslSkip, opensslTimestamp, readRequest, timestampResponse, type TsaOptions } from '../helpers/tsa.ts';
 
 const CERTS = 'test/fixtures/seal/certs';
@@ -156,6 +156,7 @@ describe('attacks on a time-stamped seal', () => {
 });
 
 describe('validation by DSS', { skip: dssSkip }, () => {
+  before(publishTestCrls);
   for (const key of ['rsa3072', 'p256']) {
     test(`${key}, level T`, async () => {
       const report = await validateWithDss(timestamped(seal(key)));
@@ -164,8 +165,8 @@ describe('validation by DSS', { skip: dssSkip }, () => {
       assert.equal(signature?.signatureIntact, true);
       assert.ok(signature?.references.every((r) => r.found && r.intact));
       assert.ok(signature?.trusted.includes('CN=Lothbrok Seal Test,OU=TSA Root CA,O=Lothbrok Ltd,C=DK'));
-      // Until the test PKI answers at pki.ezxmlseal.test, the only errors are those of the missing revocation data.
-      assert.deepEqual(signature?.errors.filter((e) => !/revocation|not conclusive/.test(e)), []);
+      assert.equal(signature?.indication, 'TOTAL_PASSED');
+      assert.deepEqual(signature?.errors, []);
     });
   }
 

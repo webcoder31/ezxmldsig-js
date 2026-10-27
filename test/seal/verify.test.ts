@@ -101,7 +101,7 @@ describe('revocation', () => {
   test('is checked by default: without revocation data, the seal is invalid', () => {
     const result = verifySeal(seal(), { caCertPath: ROOT });
     assert.equal(result.isValid(), false);
-    assert.match(result.getError() ?? '', /No revocation data for the signing certificate/);
+    assert.match(result.getError() ?? '', /No revocation data for the certificate "[^"]*RSA 3072 Seal Dept/);
     assert.deepEqual(result.getFiles(), []);
   });
 });

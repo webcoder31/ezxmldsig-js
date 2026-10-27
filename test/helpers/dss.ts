@@ -11,6 +11,11 @@
  * answer. In continuous integration (CI=true), they fail instead.
  */
 
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import { makeCrl } from './crl.ts';
+
 export const DSS_URL = process.env['DSS_URL'] ?? 'http://127.0.0.1:8090';
 
 /** Why the DSS tests are skipped, or false when they run. */
@@ -87,4 +92,33 @@ export async function validateWithDss(container: Buffer, name = 'seal.asice'): P
     };
   });
   return { containerType: simple['ContainerType'] ?? null, signatures };
+}
+
+/** The directory bin/dss serves at http://pki.ezxmlseal.test/, on the network of DSS. */
+const PKI_DIR = fileURLToPath(new URL('../.cache/dss/pki/', import.meta.url));
+
+/** The certificate the published CRLs revoke; no other one is. */
+export const REVOKED = 'revoked';
+
+/**
+ * Publishes the CRLs of the test PKI where its certificates say they are:
+ * intermediate.crl (the seal certificates), root.crl (the intermediate CA),
+ * tsa-root.crl (the time-stamping authority). Every test file publishes
+ * the same ones, which revoke test/fixtures/seal/certs/revoked.cert.pem
+ * only: the test files run at the same time, and none of them changes what
+ * another one is validating. DSS keeps them one second in its cache
+ * (bin/dss): the promise resolves once it is past.
+ */
+export async function publishTestCrls(): Promise<void> {
+  mkdirSync(PKI_DIR, { recursive: true });
+  const crls = {
+    'intermediate': makeCrl({ revoked: [{ cert: REVOKED, date: new Date(Date.now() - 3_600_000) }] }),
+    'root': makeCrl({ issuer: 'root' }),
+    'tsa-root': makeCrl({ issuer: 'tsa-root' }),
+  };
+  for (const [name, crl] of Object.entries(crls)) {
+    writeFileSync(`${PKI_DIR}${name}.crl.part`, crl);
+    renameSync(`${PKI_DIR}${name}.crl.part`, `${PKI_DIR}${name}.crl`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 }

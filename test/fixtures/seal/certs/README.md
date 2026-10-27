@@ -14,6 +14,7 @@ The keys of the signers are encrypted with the password `signKeyPassword`; the k
 | `rsa2048` | The same, RSA 2048 (legacy size, still accepted) |
 | `rsa1024` | The same, RSA 1024 (refused) |
 | `p256`, `p384` | The same, ECDSA on P-256 and P-384 |
+| `revoked` | The same, ECDSA on P-256: the CRL of the intermediate the tests publish for DSS revokes it |
 | `tsa-root` | Root CA of the time-stamping authority, RSA 3072, self-signed |
 | `tsa` | Time-stamping authority, RSA 3072, issued by `tsa-root`: extended key usage `timeStamping`, critical |
 | `tsa-no-eku` | The same without the extended key usage, ECDSA P-256 (refused) |

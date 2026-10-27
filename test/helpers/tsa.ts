@@ -16,47 +16,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const CERTS = 'test/fixtures/seal/certs';
+import { children, der, int, octets, oid, seq, set } from './der.ts';
 
-// A DER writer and reader of their own.
-function der(tag: number, ...content: Buffer[]): Buffer {
-  const body = Buffer.concat(content);
-  const length = body.length < 128 ? Buffer.from([body.length]) : body.length < 256 ? Buffer.from([0x81, body.length]) : Buffer.from([0x82, body.length >> 8, body.length & 0xff]);
-  return Buffer.concat([Buffer.from([tag]), length, body]);
-}
-const seq = (...c: Buffer[]) => der(0x30, ...c);
-const set = (...c: Buffer[]) => der(0x31, ...c);
-const octets = (b: Buffer) => der(0x04, b);
-const int = (n: number | Buffer) => {
-  const bytes = typeof n === 'number' ? Buffer.from([n]) : n;
-  return der(0x02, bytes[0]! & 0x80 ? Buffer.concat([Buffer.from([0]), bytes]) : bytes);
-};
-function oid(dotted: string): Buffer {
-  const [a, b, ...rest] = dotted.split('.').map(Number);
-  const bytes = [a! * 40 + b!];
-  for (const arc of rest) {
-    const group = [arc & 0x7f];
-    for (let v = arc >> 7; v > 0; v >>= 7) group.unshift((v & 0x7f) | 0x80);
-    bytes.push(...group);
-  }
-  return der(0x06, Buffer.from(bytes));
-}
-function children(buffer: Buffer): { tag: number; content: Buffer }[] {
-  const out = [];
-  for (let i = 0; i < buffer.length;) {
-    const tag = buffer[i++]!;
-    let length = buffer[i++]!;
-    if (length & 0x80) {
-      const n = length & 0x7f;
-      length = 0;
-      for (let k = 0; k < n; k++) length = length * 256 + buffer[i++]!;
-    }
-    const start = i;
-    i += length;
-    out.push({ tag, content: buffer.subarray(start, i) });
-  }
-  return out;
-}
+const CERTS = 'test/fixtures/seal/certs';
 
 const SHA256 = '2.16.840.1.101.3.4.2.1';
 const DIGESTS: Record<string, string> = { sha256: SHA256, sha384: '2.16.840.1.101.3.4.2.2', sha512: '2.16.840.1.101.3.4.2.3', sha1: '1.3.14.3.2.26' };
