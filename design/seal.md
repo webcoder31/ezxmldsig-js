@@ -1,6 +1,6 @@
 # Design: sealing documents with XAdES and ASiC-E
 
-Status: levels B, T and LT implemented in `src/seal/`, with revocation by CRL and OCSP; not exported by the package yet (see [Open points](#open-points)).
+Status: levels B, T and LT implemented in `src/seal/`, with revocation by CRL and OCSP; not exported by the package yet, whose layout is proposed in [Packaging](#packaging).
 
 ## Purpose and scope
 
@@ -127,9 +127,11 @@ The revocation values are issued after the time of the time-stamp: they show tha
 
 ## API
 
-Package `@webcoder31/ezxmlseal`, repository `ezxmlseal-js`, Cairn project `XSEALJS`. The functions below live in `src/seal/` of ezxmldsig-js until the package exists; its entry point does not export them.
+The seals are a branch of the package `@webcoder31/ezxmldsig`, next to the tokens (see [Packaging](#packaging)). Until that layout is in place, the functions below live in `src/seal/`, and the entry point of the package does not export them.
 
 ```ts
+import { createSeal, timestampRequest, addSignatureTimestamp, validationDataRequests, addValidationData, verifySeal } from '@webcoder31/ezxmldsig/seal';
+
 // Level B: seal files into an ASiC-E container.
 const asice: Buffer = createSeal(
   [{ name: 'contract.pdf', content: pdfBytes }, { name: 'notes.md', content: mdBytes, mimeType: 'text/markdown' }],
@@ -206,7 +208,7 @@ RSA-PSS has a cost for the PHP library to come: `openssl_sign()` and `openssl_ve
 | RFC 3161 | none | new: request, response, token verification (a CMS signature) |
 | CRL, OCSP | none | new: parsing, verification of their signature, OCSP request |
 
-These parts are taken from ezxmldsig-js, not copied: `src/seal/` imports its modules `algorithms`, `c14n`, `der`, `encoding`, `material`, `x509` and `xml`; `token`, `xmlenc` and `options` are used by the tokens only. Those seven modules are the outline of the shared core, whose extraction is an open point.
+These parts are taken from ezxmldsig-js, not copied: `src/seal/` imports its modules `algorithms`, `c14n`, `der`, `encoding`, `material`, `x509` and `xml`; `token`, `xmlenc` and `options` are used by the tokens only. Those seven modules are the outline of the shared core (see [Packaging](#packaging)).
 
 ## Tests
 
@@ -217,7 +219,7 @@ These parts are taken from ezxmldsig-js, not copied: `src/seal/` imports its mod
 
 ## Decisions
 
-1. **Name**: package `@webcoder31/ezxmlseal`, repository `ezxmlseal-js`, Cairn project `XSEALJS`. The name keeps the family of `ezxmldsig`, and says what the package makes.
+1. **One package per language**: the seals are a branch of `@webcoder31/ezxmldsig` (npm) and of `webcoder31/ezxmldsig` (Packagist), beside the tokens, both built on a core of the same package (see [Packaging](#packaging)). A seal is an XML signature, as a token is: the name covers both.
 2. **ZIP: an implementation of our own**, with `node:zlib` (`deflateRawSync`, `inflateRawSync`, `crc32`), no dependency. The writer produces what ASiC-E needs: `mimetype` first and stored, the other entries deflated, UTF-8 names, no ZIP64. The reader is the part where a library would not help: it must refuse what makes a container ambiguous, which general ZIP libraries accept. It reads the central directory and checks each local header against it; it refuses duplicate names, names with `..`, an absolute path or a backslash, encryption, methods other than stored and deflate, ZIP64, data before the first entry or between entries, and an uncompressed size beyond a limit (`maxOutputLength`). It accepts data descriptors (flag 3), which DSS writes for every deflated entry.
 3. **Canonicalization: exclusive** (`http://www.w3.org/2001/10/xml-exc-c14n#`), for `SignedInfo`, `SignedProperties` and the time-stamp: allowed by ASiC, written by DSS, and independent of the namespaces declared on `asic:XAdESSignatures`. C14N 1.0 and 1.1 are accepted at verification.
 4. **Signature algorithm**: it follows the key, ECDSA for an EC key and RSA-PSS for an RSA key, RSA-PKCS#1 v1.5 on request (see [Algorithms](#algorithms)).
@@ -245,8 +247,89 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 - **With the CRLs of the test PKI served at `pki.ezxmlseal.test`**, the seals of the tests are `TOTAL_PASSED` at levels B and T; a signer listed in the CRL of the intermediate gives `INDETERMINATE`, `REVOKED_NO_POE`, "The certificate is revoked!". DSS keeps the CRLs it fetched in a cache until their next update, at most three hours by default (`cache.crl.max.next.update`): `bin/dss` brings it down to one second, so that a CRL published again is seen.
 - **Revocation is required by the default policy of DSS, at levels B and T alike.** With the test root CA as a trust anchor, the container signed with the test signing key is `INDETERMINATE`, `CERTIFICATE_CHAIN_GENERAL_FAILURE`, "No revocation data found for the certificate!". A third party validating with DSS therefore needs to reach revocation data for the signing certificate: a CA whose certificates name a CRL distribution point or an OCSP responder that answers, or revocation data embedded in the seal (level LT).
 
+## Packaging
+
+Status: proposal, to be decided.
+
+### One package, three branches
+
+Each language has one package, `@webcoder31/ezxmldsig` on npm and `webcoder31/ezxmldsig` on Packagist, in one repository, `ezxmldsig-js` and `ezxmldsig-php`. The package has three branches:
+
+- **core**: what the tokens and the seals share, certificates and chain of trust, DER, guarded XML parsing, canonicalization, algorithm identifiers, PEM sources;
+- **token**: the signed and encrypted XML tokens;
+- **seal**: the seals of files, XAdES in ASiC-E.
+
+`token` and `seal` are siblings: each depends on `core`, neither on the other, and `core` on neither. A fix in `core` reaches both in one release, and nothing is published in between: a change of `core` is seen by `token` and `seal` as soon as it is written.
+
+One package rather than three: the seals add no dependency to those of the tokens in Node.js (`@xmldom/xmldom`, and modules of Node.js: `node:crypto`, `node:zlib`); one release carries a fix to both; no version of a core is to be published before its users can take a change. What is lost is the independent versioning of the tokens and of the seals: see [Versions](#versions).
+
+### What goes into each branch
+
+| Module | Lines | Tokens | Seals | Branch |
+|---|---|---|---|---|
+| `der.ts`, DER reader and encoder | 242 | through `x509.ts` | CRL, OCSP, time-stamps | core |
+| `x509.ts`, `X509Cert`, chain of trust, `matchesName` | 941 | yes | yes | core |
+| `material.ts`, PEM sources | 83 | yes | yes | core |
+| `xml.ts`, guarded parsing | 193 | yes | `loadXML` | core |
+| `c14n.ts`, canonicalization with its guards | 36 | yes | yes | core |
+| `algorithms.ts`, identifiers | 79 | yes | signature, digest and canonicalization identifiers | core: the identifiers of XML Signature, with RSA-PSS and ECDSA of `src/seal/algorithms.ts`; token: those of XML Encryption |
+| `encoding.ts`, escaping and token formats | 96 | yes | `escapeText`, `escapeAttribute` | core: the two escaping functions; token: `phpBase64Decode`, `parseTokenDate`, `formatTokenDate`, `isXmlName` |
+| `token.ts`, `options.ts`, `xmlenc.ts` | 2 253 | yes | no | token |
+| `src/seal/` | 3 269 | no | yes | seal |
+
+The time-stamps, the CRLs, OCSP and `pkix.ts` stay in `seal`: the tokens check neither revocation nor time-stamps. Should they one day, those modules move into `core` then, with boundaries drawn from that second use, not before. The policy of algorithms of the seals (`SIGNATURE_SCHEMES`, `MIN_RSA_BITS`) stays in `seal`, that of the tokens in `token`: they differ, the tokens signing with RSA PKCS#1 v1.5 for their interoperability with the PHP library.
+
+The dependency `xpath` is used by `token` only, `xml-crypto` by `core` only, through an internal path (`xml-crypto/lib/utils.js`), hence its version pinned exactly; `@xmldom/xmldom` by the three branches.
+
+### Layout
+
+Node.js:
+
+```
+src/core/       algorithms.ts c14n.ts der.ts encoding.ts material.ts x509.ts xml.ts index.ts
+src/token/      token.ts options.ts xmlenc.ts encoding.ts algorithms.ts index.ts
+src/seal/       seal.ts verify.ts extend.ts validation.ts timestamp.ts crl.ts ocsp.ts revocation.ts pkix.ts zip.ts algorithms.ts index.ts
+test/core/  test/token/  test/seal/
+```
+
+The package exports three subpaths, one per branch, and no root:
+
+```ts
+import { X509Cert, SHA256, type PemSource } from '@webcoder31/ezxmldsig/core';
+import { XMLDSigToken } from '@webcoder31/ezxmldsig/token';
+import { createSeal, verifySeal } from '@webcoder31/ezxmldsig/seal';
+```
+
+`core` exports its public names only: `X509Cert`, `NameFields`, `PemSource`, the algorithm identifiers. Its other functions, the DER reader, `loadXML`, `canonicalize`, `readPem`, are imported by `token` and `seal` inside the package, and are not reachable from outside: the field `exports` of `package.json` lists the three subpaths alone. They can change in any release.
+
+PHP, by namespace, with PSR-4 (one directory per namespace):
+
+```
+src/core/       webcoder31\ezxmldsig\core     X509Cert, the policy of algorithms, canonicalization, the guards
+src/token/      webcoder31\ezxmldsig\token    XMLDSigToken
+src/seal/       webcoder31\ezxmldsig\seal     the seals, when they are written in PHP
+```
+
+In PHP, `core` is to be cut out of `XMLDSigToken.php`, where the policy of algorithms, the canonicalization, the guards against the attacks on XMLDSig and the loading of the trust anchors are mixed with the tokens. PHP has no equivalent of the field `exports`: the classes of `core` that are not meant for the applications are marked `@internal`.
+
+### The boundaries, checked
+
+The rule that `core` imports neither `token` nor `seal`, and that `token` and `seal` do not import each other, is checked by a test, not left to review: it reads the imports of every file of `src/` (the `use` statements in PHP) and fails on one that crosses a boundary.
+
+### Versions
+
+- **The move is a major version**, 2.0.0 in both languages: `XMLDSigToken` and `X509Cert` change of import path (Node.js) or of namespace (PHP). The CHANGELOG gives the old and the new name of each public symbol. No alias is kept: the libraries are barely distributed (no dependent package on Packagist), and the branches start clean.
+- **The seals are experimental in 2.x**, until a review of their API: their changes may break in a minor version, which the README and the CHANGELOG say. The tokens and `core` follow semantic versioning. One version number carries both, the price of one package: a release of the seals is a release of the tokens too, with nothing changed for them.
+- **When to split after all**: in PHP, the seals need RSA-PSS, which the OpenSSL extension cannot produce. If the PHP seals take a dependency for it (such as phpseclib) rather than an encoding of their own, or need a version of PHP above that of the tokens (7.4 today), every user of the tokens would bear it: the seals would then become a package of their own in PHP, depending on the PHP package for `core`.
+
+### Order of the work
+
+1. **Node.js, on the branch of the design**: the modules into `src/core/` and `src/token/`, `encoding.ts` and `algorithms.ts` split, the imports, `test/core/` and `test/token/`, the test of the boundaries, the three subpaths in `package.json`, the entry points of the documentation of the API (TypeDoc), the README and the CHANGELOG of 2.0.0. The whole suite passes, the interoperability with the PHP library included.
+2. **The branch merged** into `main` of ezxmldsig-js, then 2.0.0 published.
+3. **PHP**: `core` cut out of `XMLDSigToken.php`, the namespaces `core` and `token`, 2.0.0; the PHP seals later, in `seal`.
+
 ## Open points
 
-- **The package and the shared core**: the seals are not exported, and the modules of ezxmldsig-js they use are to be extracted into a dependency common to the tokens and the seals. What goes into it, its name, and what it changes for the published versions of ezxmldsig-js, are to be designed.
+- **The layout of the package**: the seals are not exported yet; the layout in three branches is proposed in [Packaging](#packaging), to be decided.
 - **Public time-stamping authorities**: which ones answer without an account, and whether their certificates carry the revocation data level LT needs.
 - **OCSP fetched by DSS**: the tests give DSS OCSP responses embedded in the seals only. `bin/dss` serves files, and an OCSP responder answers a POST: the certificates of the test PKI name one at `pki.ezxmlseal.test/ocsp`, which nothing answers yet.
