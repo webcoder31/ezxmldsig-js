@@ -10,7 +10,9 @@
 # CRL distribution point and an OCSP responder, under the host name
 # pki.ezxmlseal.test (a reserved top-level domain). The library never calls
 # them; the tests that send seals to DSS serve them at that name, on the
-# Docker network of DSS. See the README of test/fixtures/seal/certs/.
+# Docker network of DSS. A branch of the PKI names offline.ezxmlseal.test
+# instead, which nobody serves: DSS can validate its seals by the data
+# they embed only. See the README of test/fixtures/seal/certs/.
 #
 # The script always runs itself again inside an Alpine Docker container
 # (alpine:3.22), whatever openssl the host has. The container runs as root,
@@ -43,6 +45,7 @@ OUT_DIR="$ROOT_DIR/test/fixtures/seal/certs"
 SIGN_KEY_PASSWORD=signKeyPassword
 DAYS=3650
 PKI=http://pki.ezxmlseal.test
+OFFLINE=http://offline.ezxmlseal.test
 
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -79,6 +82,28 @@ extendedKeyUsage = critical, timeStamping
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid
 crlDistributionPoints = URI:$PKI/tsa-root.crl
+
+[intermediate_offline]
+basicConstraints = critical, CA:TRUE, pathlen:0
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$OFFLINE/root.crl
+
+[seal_offline]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, nonRepudiation
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$OFFLINE/intermediate-offline.crl
+
+[tsa_offline]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = critical, timeStamping
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$OFFLINE/tsa-root.crl
 
 [tsa_no_eku]
 basicConstraints = CA:FALSE
@@ -129,14 +154,21 @@ issue revoked "$(subject 'Revoked Seal Dept')" seal "$P256" "$WORK_DIR/intermedi
 issue p256 "$(subject 'P-256 Seal Dept')" seal "$P256" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
 issue p384 "$(subject 'P-384 Seal Dept')" seal "$P384" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
 
+# The branch whose CRLs nobody serves: an intermediate CA under the root,
+# a signer under it, a time-stamping authority under the root of the
+# authorities.
+issue intermediate-offline "$(subject 'Offline Intermediate CA')" intermediate_offline "$P256" "$WORK_DIR/root.cert.pem" "$WORK_DIR/root.key.pem"
+issue offline "$(subject 'Offline Seal Dept')" seal_offline "$P256" "$WORK_DIR/intermediate-offline.cert.pem" "$WORK_DIR/intermediate-offline.key.pem"
+
 # A time-stamping authority under a root of its own, and a certificate of
 # that root without the extended key usage timeStamping.
 issue tsa-root "$(subject 'TSA Root CA')" root "$RSA3072"
 issue tsa "$(subject 'Time-Stamping Unit')" tsa "$RSA3072" "$WORK_DIR/tsa-root.cert.pem" "$WORK_DIR/tsa-root.key.pem"
 issue tsa-no-eku "$(subject 'Time-Stamping Unit Without EKU')" tsa_no_eku "$P256" "$WORK_DIR/tsa-root.cert.pem" "$WORK_DIR/tsa-root.key.pem"
+issue tsa-offline "$(subject 'Offline Time-Stamping Unit')" tsa_offline "$P256" "$WORK_DIR/tsa-root.cert.pem" "$WORK_DIR/tsa-root.key.pem"
 
 # The keys of the signers are encrypted with the password of the tests.
-for name in rsa3072 rsa2048 rsa1024 p256 p384 revoked; do
+for name in rsa3072 rsa2048 rsa1024 p256 p384 revoked offline; do
     openssl pkey -in "$WORK_DIR/$name.key.pem" -aes256 -passout "pass:$SIGN_KEY_PASSWORD" \
         -out "$WORK_DIR/$name.key.enc.pem"
     mv "$WORK_DIR/$name.key.enc.pem" "$WORK_DIR/$name.key.pem"
@@ -147,7 +179,11 @@ for name in rsa3072 rsa2048 p256 p384; do
     openssl verify -CAfile "$WORK_DIR/root.cert.pem" -untrusted "$WORK_DIR/intermediate.cert.pem" \
         "$WORK_DIR/$name.cert.pem" >/dev/null
 done
-openssl verify -CAfile "$WORK_DIR/tsa-root.cert.pem" -purpose timestampsign "$WORK_DIR/tsa.cert.pem" >/dev/null
+openssl verify -CAfile "$WORK_DIR/root.cert.pem" -untrusted "$WORK_DIR/intermediate-offline.cert.pem" \
+    "$WORK_DIR/offline.cert.pem" >/dev/null
+for name in tsa tsa-offline; do
+    openssl verify -CAfile "$WORK_DIR/tsa-root.cert.pem" -purpose timestampsign "$WORK_DIR/$name.cert.pem" >/dev/null
+done
 
 mkdir -p "$OUT_DIR"
 rm -f "$OUT_DIR"/*.pem

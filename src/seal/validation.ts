@@ -159,7 +159,8 @@ function inspect(container: Uint8Array, options: Parameters<typeof inspectSeal>[
   }
   const error = inspected.result.getError();
   if (error !== null) {
-    throw new Error(`Validation data: the seal is not valid. ${error}`);
+    // verifySeal() suggests revocation: false, which the extension has not.
+    throw new Error(`Validation data: the seal is not valid. ${error.replace(/ \(the option revocation: false [^)]*\)$/, '')}`);
   }
   return inspected;
 }

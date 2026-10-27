@@ -39,7 +39,7 @@ export interface TsaOptions {
   hash?: string;
   time?: Date;
   /** The certificate and key of the authority (default: tsa). */
-  name?: 'tsa' | 'tsa-no-eku';
+  name?: 'tsa' | 'tsa-no-eku' | 'tsa-offline';
   status?: number;
   /** The ESS attribute: 2 (default), 1, or none. */
   ess?: 1 | 2 | 'none';

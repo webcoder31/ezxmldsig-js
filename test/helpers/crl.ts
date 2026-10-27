@@ -17,7 +17,7 @@ import { children, der, int, octets, oid, seq, time } from './der.ts';
 
 const CERTS = 'test/fixtures/seal/certs';
 
-export type CaName = 'root' | 'intermediate' | 'tsa-root';
+export type CaName = 'root' | 'intermediate' | 'intermediate-offline' | 'tsa-root';
 
 export interface CrlOptions {
   /** The CA whose name the CRL bears (default: intermediate). */
@@ -63,7 +63,8 @@ export function issuingDistributionPoint(fields: { onlyUser?: boolean; onlyCA?: 
 export function makeCrl(options: CrlOptions = {}): Buffer {
   const issuer = options.issuer ?? 'intermediate';
   const key = createPrivateKey(readFileSync(`${CERTS}/${options.signer ?? issuer}.key.pem`));
-  const algorithm = seq(oid('1.2.840.113549.1.1.11'), der(0x05));
+  // sha256WithRSAEncryption, or ecdsa-with-SHA256 (no parameters), as the key of the signer.
+  const algorithm = key.asymmetricKeyType === 'ec' ? seq(oid('1.2.840.10045.4.3.2')) : seq(oid('1.2.840.113549.1.1.11'), der(0x05));
   const thisUpdate = options.thisUpdate ?? new Date(Date.now() - 5_000);
   const nextUpdate = options.nextUpdate === undefined ? new Date(thisUpdate.getTime() + 7 * 86_400_000) : options.nextUpdate;
   const revoked = (options.revoked ?? []).map((entry) => seq(

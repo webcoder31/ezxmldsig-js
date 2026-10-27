@@ -29,7 +29,19 @@ const TRUST = { caCertPath: ROOT, tsaCertPath: TSA_ROOT };
 const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000);
 
 function seal(key = 'rsa3072'): Buffer {
-  return createSeal([{ name: 'contrat.pdf', content: Buffer.from('%PDF-1.4\n') }], `${CERTS}/${key}.key.pem`, `${CERTS}/${key}.cert.pem`, 'signKeyPassword', { chain: [`${CERTS}/intermediate.cert.pem`] });
+  const intermediate = key === 'offline' ? 'intermediate-offline' : 'intermediate';
+  return createSeal([{ name: 'contrat.pdf', content: Buffer.from('%PDF-1.4\n') }], `${CERTS}/${key}.key.pem`, `${CERTS}/${key}.cert.pem`, 'signKeyPassword', { chain: [`${CERTS}/${intermediate}.cert.pem`] });
+}
+
+/**
+ * A seal of the branch of the test PKI whose CRLs nobody serves
+ * (offline.ezxmlseal.test): its signer, its intermediate CA and its
+ * time-stamping authority. The CRLs of its chains, with the given dates.
+ */
+function offline(crlOptions: CrlOptions = {}): { sealT: Buffer; crls: Buffer[] } {
+  const sealT = timestamped('offline', { name: 'tsa-offline' });
+  const crls = (['intermediate-offline', 'root', 'tsa-root'] as const).map((issuer) => makeCrl({ ...crlOptions, issuer }));
+  return { sealT, crls };
 }
 
 // The time-stamps are made a few seconds ago: the seal certificates are
@@ -201,6 +213,19 @@ describe('the verification of a seal of level LT', () => {
   });
 });
 
+describe('a seal whose CRLs nobody serves', () => {
+  test('lists the distribution points of offline.ezxmlseal.test', () => {
+    assert.deepEqual(validationDataRequests(offline().sealT, TRUST).crls.map((request) => request.urls), [
+      ['http://offline.ezxmlseal.test/intermediate-offline.crl'], ['http://offline.ezxmlseal.test/root.crl'], ['http://offline.ezxmlseal.test/tsa-root.crl'],
+    ]);
+  });
+
+  test('level LT, its CRLs past their next update: valid by what it embeds', () => {
+    const { sealT, crls } = offline({ thisUpdate: secondsAgo(15), nextUpdate: secondsAgo(5) });
+    assert.equal(check(extended(sealT, crls)).getLevel(), 'LT');
+  });
+});
+
 describe('validation by DSS', { skip: dssSkip }, () => {
   before(publishTestCrls);
 
@@ -212,6 +237,29 @@ describe('validation by DSS', { skip: dssSkip }, () => {
       assert.equal(signature?.format, 'XAdES-BASELINE-LT');
       assert.equal(signature?.indication, 'TOTAL_PASSED');
       assert.deepEqual(signature?.errors, []);
+    });
+  }
+
+  // DSS cannot reach offline.ezxmlseal.test: what it knows of the status of
+  // the certificates comes from the seal, or nowhere.
+  test('offline, level T: INDETERMINATE, no revocation data', async () => {
+    const report = await validateWithDss(offline().sealT);
+    const signature = report.signatures[0];
+    assert.equal(signature?.format, 'XAdES-BASELINE-T');
+    assert.equal(signature?.indication, 'INDETERMINATE');
+    assert.ok(signature?.errors.includes('No revocation data found for the certificate!'), JSON.stringify(signature?.errors));
+    assert.deepEqual(report.revocationOrigins, []);
+  });
+
+  for (const [name, crlOptions] of [['current', {}], ['past their next update', { thisUpdate: secondsAgo(15), nextUpdate: secondsAgo(5) }]] as const) {
+    test(`offline, level LT, its CRLs ${name}: TOTAL_PASSED, by the CRLs of the seal only`, async () => {
+      const { sealT, crls } = offline(crlOptions);
+      const report = await validateWithDss(extended(sealT, crls));
+      const signature = report.signatures[0];
+      assert.equal(signature?.format, 'XAdES-BASELINE-LT');
+      assert.equal(signature?.indication, 'TOTAL_PASSED');
+      assert.deepEqual(signature?.errors, []);
+      assert.deepEqual(report.revocationOrigins, ['INPUT_DOCUMENT', 'INPUT_DOCUMENT', 'INPUT_DOCUMENT']);
     });
   }
 });
