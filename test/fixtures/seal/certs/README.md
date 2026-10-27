@@ -18,6 +18,8 @@ The keys of the signers are encrypted with the password `signKeyPassword`; the k
 | `tsa-root` | Root CA of the time-stamping authority, RSA 3072, self-signed |
 | `tsa` | Time-stamping authority, RSA 3072, issued by `tsa-root`: extended key usage `timeStamping`, critical |
 | `tsa-no-eku` | The same without the extended key usage, ECDSA P-256 (refused) |
+| `ocsp` | OCSP responder the intermediate delegates, ECDSA P-256: extended key usage `OCSPSigning`, extension `id-pkix-ocsp-nocheck` |
+| `ocsp-checked` | The same without `id-pkix-ocsp-nocheck` (refused: the library does not check the revocation of responders) |
 | `intermediate-offline` | Intermediate CA, ECDSA P-256, issued by the root; CRL at `http://offline.ezxmlseal.test/root.crl` |
 | `offline` | Seal certificate, ECDSA P-256, issued by `intermediate-offline`; CRL at `http://offline.ezxmlseal.test/intermediate-offline.crl`, no OCSP responder |
 | `tsa-offline` | Time-stamping authority, ECDSA P-256, issued by `tsa-root`; CRL at `http://offline.ezxmlseal.test/tsa-root.crl` |

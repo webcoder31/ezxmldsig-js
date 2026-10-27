@@ -10,42 +10,47 @@
 
 /**
  * The extension of a seal to level LT (EN 319 132-1, 5.4, 5.5.1, 6.3): the
- * certificates and the CRLs that validate it, embedded in its unsigned
+ * certificates, CRLs and OCSP responses that validate it, embedded in its unsigned
  * properties, so that a third party can validate it without reaching the
  * CAs.
  *
  * Without network access, as for the time-stamp: validationDataRequests()
- * lists the CRLs to fetch, the caller fetches them, and addValidationData()
- * checks them before it embeds them. The signed parts of the signature
+ * lists the CRLs to fetch and the OCSP requests to send, the caller fetches
+ * and sends them, and addValidationData() checks the answers before it
+ * embeds them, only those that told the status of a certificate. The signed parts of the signature
  * file are left byte for byte as they are.
  *
  * What goes where:
  *
  * - xades141:TimeStampValidationData, right after the time-stamp (5.5.1.2):
  *   the certificates of the chain of the time-stamping authority the token
- *   does not hold, and their CRLs;
+ *   does not hold, and their CRLs or OCSP responses;
  * - xades:CertificateValues (5.4.2): the certificates of the chain of the
  *   signer ds:KeyInfo does not hold, its trust anchor included;
- * - xades:RevocationValues (5.4.3): a CRL for each certificate of that
- *   chain, its trust anchor excepted.
+ * - xades:RevocationValues (5.4.3): a CRL or an OCSP response for each
+ *   certificate of that chain, its trust anchor excepted.
  *
- * A certificate or a CRL is embedded once (Table 2, q and v). The CRLs must
- * be issued after the time-stamp: they show that the certificates were not
- * revoked at that time. Right after the time-stamp, a CA has not issued one
- * yet; the extension then waits for its next CRL.
+ * A certificate, a CRL or a response is embedded once (Table 2, q and v).
+ * They must be issued after the time-stamp: they show that the certificates
+ * were not revoked at that time. Right after the time-stamp, a CA has not
+ * issued such a CRL yet; the extension then waits for its next CRL, or
+ * asks its responder.
  */
 
-import { TAG, childrenOf, readElement, readElements } from '../der.js';
+import { TAG, childrenOf, decodeOid, readElement, readElements } from '../der.js';
 import type { PemSource } from '../material.js';
 import type { X509Cert } from '../x509.js';
 import { loadXML } from '../xml.js';
-import type { Crl } from './crl.js';
 import { locate } from './extend.js';
+import { buildOcspRequest } from './ocsp.js';
+import type { RevocationSource } from './revocation.js';
 import { XADES141_NS, XADES_NS } from './seal.js';
 import { inspectSeal, type InspectedSeal } from './verify.js';
 import { readZip, writeZip } from './zip.js';
 
 const CRL_DISTRIBUTION_POINTS = '2.5.29.31';
+const AUTHORITY_INFO_ACCESS = '1.3.6.1.5.5.7.1.1';
+const ID_AD_OCSP = '1.3.6.1.5.5.7.48.1';
 
 export interface ValidationDataOptions {
   /** The trusted CA certificates of the signer, as for verifySeal(). */
@@ -56,7 +61,9 @@ export interface ValidationDataOptions {
 
 export interface AddValidationDataOptions extends ValidationDataOptions {
   /** The CRLs, in DER or PEM, fetched from the URLs validationDataRequests() lists. */
-  readonly crls: readonly Uint8Array[];
+  readonly crls?: readonly Uint8Array[];
+  /** The OCSP responses (DER) to the requests validationDataRequests() lists. */
+  readonly ocspResponses?: readonly Uint8Array[];
 }
 
 /** A CRL to fetch: for a certificate, from the URLs of its CRL distribution points. */
@@ -68,25 +75,45 @@ export interface CrlRequest {
   readonly urls: readonly string[];
 }
 
+/** An OCSP request to send: for a certificate, to the responders its authority information access names. */
+export interface OcspRequest {
+  readonly certificate: X509Cert;
+  readonly issuer: X509Cert;
+  /** The http and https URLs of its OCSP responders. */
+  readonly urls: readonly string[];
+  /** The OCSPRequest (DER), to POST with the media type `application/ocsp-request`. */
+  readonly request: Buffer;
+}
+
 /**
- * The CRLs a seal needs: one for each certificate of the chains of the
- * signer and of the time-stamping authority, their trust anchors excepted.
- * Also useful at level B or T, to get the CRLs verifySeal() needs.
+ * The revocation data a seal needs: for each certificate of the chains of
+ * the signer and of the time-stamping authority, their trust anchors
+ * excepted, the CRL to fetch, and the OCSP request to send if the
+ * certificate names a responder. One of the two suffices for a
+ * certificate. Also useful at level B or T, to get the data verifySeal()
+ * needs.
  *
  * @throws {Error} If the seal is not valid, revocation aside.
  */
-export function validationDataRequests(container: Uint8Array, options: ValidationDataOptions): { crls: CrlRequest[] } {
+export function validationDataRequests(container: Uint8Array, options: ValidationDataOptions): { crls: CrlRequest[]; ocsp: OcspRequest[] } {
   const inspected = inspect(container, { ...options, revocation: false });
   const crls: CrlRequest[] = [];
+  const ocsp: OcspRequest[] = [];
   for (const chain of [inspected.chain, inspected.tsaChain]) {
     for (let index = 0; chain !== null && index + 1 < chain.length; index++) {
       const certificate = chain[index] as X509Cert;
-      if (!crls.some((request) => request.certificate.getDer().equals(certificate.getDer()))) {
-        crls.push({ certificate, issuer: chain[index + 1] as X509Cert, urls: distributionPoints(certificate) });
+      const issuer = chain[index + 1] as X509Cert;
+      if (crls.some((request) => request.certificate.getDer().equals(certificate.getDer()))) {
+        continue;
+      }
+      crls.push({ certificate, issuer, urls: distributionPoints(certificate) });
+      const responders = ocspResponders(certificate);
+      if (responders.length > 0) {
+        ocsp.push({ certificate, issuer, urls: responders, request: buildOcspRequest(certificate, issuer) });
       }
     }
   }
-  return { crls };
+  return { crls, ocsp };
 }
 
 /**
@@ -98,10 +125,15 @@ export function validationDataRequests(container: Uint8Array, options: Validatio
  *   CRLs do not tell the status of every certificate after the time-stamp.
  */
 export function addValidationData(container: Uint8Array, options: AddValidationDataOptions): Buffer {
-  if (!Array.isArray(options?.crls)) {
-    throw new Error("Validation data: the option 'crls' is required: an array of CRLs (Uint8Array).");
+  if (options?.crls === undefined && options?.ocspResponses === undefined) {
+    throw new Error("Validation data: the option 'crls' or 'ocspResponses' is required.");
   }
-  const inspected = inspect(container, { caCertPath: options.caCertPath, tsaCertPath: options.tsaCertPath, crls: options.crls });
+  const inspected = inspect(container, {
+    caCertPath: options.caCertPath,
+    tsaCertPath: options.tsaCertPath,
+    ...(options.crls === undefined ? {} : { crls: options.crls }),
+    ...(options.ocspResponses === undefined ? {} : { ocspResponses: options.ocspResponses }),
+  });
   const level = inspected.result.getLevel();
   if (level !== 'T') {
     throw new Error(level === 'B' ? 'Validation data: the seal must be time-stamped first (level T).' : 'Validation data: the seal already has validation data.');
@@ -109,13 +141,16 @@ export function addValidationData(container: Uint8Array, options: AddValidationD
   const chain = inspected.chain as X509Cert[];
   const tsaChain = inspected.tsaChain as X509Cert[];
 
-  // Each certificate and each CRL once: the signer's first, then what the
-  // time-stamping authority needs besides.
+  // Each certificate, CRL and OCSP response once: the signer's first, then
+  // what the time-stamping authority needs besides.
   const held = [...inspected.keyInfo, ...inspected.tokenCertificates];
   const signerCertificates = unique(chain.map((cert) => cert.getDer()), inspected.keyInfo);
   const tsaCertificates = unique(tsaChain.map((cert) => cert.getDer()), [...held, ...signerCertificates]);
-  const signerCrls = unique(inspected.signerCrls.map((crl: Crl) => crl.der), []);
-  const tsaCrls = unique(inspected.tsaCrls.map((crl: Crl) => crl.der), signerCrls);
+  const ders = (sources: readonly RevocationSource[], kind: RevocationSource['kind']) => sources.filter((source) => source.kind === kind).map((source) => source.der);
+  const signerCrls = unique(ders(inspected.signerSources, 'crl'), []);
+  const signerOcsp = unique(ders(inspected.signerSources, 'ocsp'), []);
+  const tsaCrls = unique(ders(inspected.tsaSources, 'crl'), signerCrls);
+  const tsaOcsp = unique(ders(inspected.tsaSources, 'ocsp'), signerOcsp);
 
   const entries = readZip(Buffer.from(container));
   const { entry, signature } = locate(entries, 'Validation data');
@@ -126,9 +161,9 @@ export function addValidationData(container: Uint8Array, options: AddValidationD
   if (properties.length !== 1 || at < 0 || xml.indexOf(closing, at + 1) >= 0) {
     throw new Error('Validation data: the end of the unsigned signature properties cannot be told in the signature file.');
   }
-  const timestampData = tsaCertificates.length + tsaCrls.length === 0 ? ''
-    : `<xades141:TimeStampValidationData xmlns:xades141="${XADES141_NS}">${certificateValues(tsaCertificates)}${revocationValues(tsaCrls)}</xades141:TimeStampValidationData>`;
-  const added = timestampData + certificateValues(signerCertificates) + revocationValues(signerCrls);
+  const timestampData = tsaCertificates.length + tsaCrls.length + tsaOcsp.length === 0 ? ''
+    : `<xades141:TimeStampValidationData xmlns:xades141="${XADES141_NS}">${certificateValues(tsaCertificates)}${revocationValues(tsaCrls, tsaOcsp)}</xades141:TimeStampValidationData>`;
+  const added = timestampData + certificateValues(signerCertificates) + revocationValues(signerCrls, signerOcsp);
   const extended = xml.slice(0, at) + added + xml.slice(at);
   loadXML(extended, 'XAdES signature');
 
@@ -181,9 +216,28 @@ function certificateValues(certificates: readonly Buffer[]): string {
     : `<xades:CertificateValues xmlns:xades="${XADES_NS}">${certificates.map((der) => `<xades:EncapsulatedX509Certificate>${der.toString('base64')}</xades:EncapsulatedX509Certificate>`).join('')}</xades:CertificateValues>`;
 }
 
-function revocationValues(crls: readonly Buffer[]): string {
-  return crls.length === 0 ? ''
-    : `<xades:RevocationValues xmlns:xades="${XADES_NS}"><xades:CRLValues>${crls.map((der) => `<xades:EncapsulatedCRLValue>${der.toString('base64')}</xades:EncapsulatedCRLValue>`).join('')}</xades:CRLValues></xades:RevocationValues>`;
+function revocationValues(crls: readonly Buffer[], responses: readonly Buffer[]): string {
+  const values = (name: string, list: readonly Buffer[]) => (list.length === 0 ? ''
+    : `<xades:${name}Values>${list.map((der) => `<xades:Encapsulated${name}Value>${der.toString('base64')}</xades:Encapsulated${name}Value>`).join('')}</xades:${name}Values>`);
+  return crls.length + responses.length === 0 ? ''
+    : `<xades:RevocationValues xmlns:xades="${XADES_NS}">${values('CRL', crls)}${values('OCSP', responses)}</xades:RevocationValues>`;
+}
+
+/** The http and https URLs of the OCSP responders of a certificate (RFC 5280, 4.2.2.1). */
+function ocspResponders(certificate: X509Cert): string[] {
+  const extension = certificate.getExtension(AUTHORITY_INFO_ACCESS);
+  if (extension === null) {
+    return [];
+  }
+  try {
+    return childrenOf(readElement(extension.value), TAG.SEQUENCE).flatMap((description) => {
+      const [method, location] = childrenOf(description, TAG.SEQUENCE);
+      const url = location?.content.toString('latin1') ?? '';
+      return method !== undefined && decodeOid(method) === ID_AD_OCSP && location?.tag === 0x86 && /^https?:\/\//i.test(url) ? [url] : [];
+    });
+  } catch {
+    return [];
+  }
 }
 
 /**

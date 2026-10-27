@@ -28,7 +28,8 @@ In scope: levels B, T and LT. Revocation is part of the first version, since a t
 | ETSI TS 119 312, cryptographic suites | V2.1.1 (2026-06) | algorithms and key sizes |
 | RFC 3161, time-stamp protocol (updated by RFC 5816) | not read yet | request and response of level T |
 | RFC 5280, certificates and CRLs | not read yet | CRL, CRL distribution points, authority information access |
-| RFC 6960, OCSP | not read yet | request and response |
+| RFC 6960, OCSP | 2013-06 | request and response, authorized responders (4.2.2.2), archive cutoff (4.4.4) |
+| RFC 5019, lightweight OCSP profile | 2007-09 | the SHA-1 CertID of the requests (2.1.1) |
 | RFC 6931, XML security algorithm identifiers | not read yet | URIs of RSA-PSS and ECDSA |
 | OASIS ODF 1.2, part 3 | not read in full | `META-INF/manifest.xml`, relative URIs |
 
@@ -116,7 +117,7 @@ The material needed to validate the signature is embedded, in `UnsignedSignature
 
 - `xades141:TimeStampValidationData` (namespace `v1.4.1`), right after the time-stamp it serves (5.5.1.2): the certificates of the path of the time-stamping authority that the token does not hold, its trust anchor included (`CertificateValues`), and their CRLs (`RevocationValues`). `CertificateValues` and `RevocationValues` of the signature itself shall not hold the material of the time-stamps (5.4.2, item 5; 5.4.3, item 4);
 - `xades:CertificateValues`: the certificates of the path of the signing certificate that `ds:KeyInfo` does not hold, its trust anchor included (5.4.2);
-- `xades:RevocationValues`: a CRL (`CRLValues/EncapsulatedCRLValue`) for the signing certificate and each CA certificate of its path, the trust anchor excepted (5.4.3); OCSP responses (`OCSPValues`) are not produced nor accepted yet;
+- `xades:RevocationValues`: a CRL (`CRLValues/EncapsulatedCRLValue`) or an OCSP response (`OCSPValues/EncapsulatedOCSPValue`) for the signing certificate and each CA certificate of its path, the trust anchor excepted (5.4.3). Only the data that told the status of a certificate are embedded: a CRL given besides an OCSP response that told it is left out;
 - no duplicate of a certificate or of a revocation value (Table 2, q and v): a CRL the signer's path already embeds is not repeated for the time-stamping authority; `CompleteCertificateRefsV2` and `CompleteRevocationRefs` shall not be present (Table 2).
 
 The revocation values are issued after the time of the time-stamp: they show that the certificates were not revoked at that time. Right after a time-stamp, a CA has not issued such a CRL yet: the extension to level LT waits for its next one.
@@ -142,13 +143,13 @@ const asiceT: Buffer = addSignatureTimestamp(asice, response, { tsaCertPath });
 // Level LT, without network access either: the library lists what to fetch,
 // the caller fetches it, the library checks it and embeds it.
 const needs = validationDataRequests(asiceT, { caCertPath, tsaCertPath });
-//   needs.crls: [{ certificate, issuer, urls }]   urls: the http(s) CRL distribution points of the certificate
-const asiceLT: Buffer = addValidationData(asiceT, { caCertPath, tsaCertPath, crls: [crlBytes] });
-// To come: needs.ocsp, [{ certificate, url, request }], and the option ocspResponses.
+//   needs.crls: [{ certificate, issuer, urls }]            urls: the http(s) CRL distribution points of the certificate
+//   needs.ocsp: [{ certificate, issuer, urls, request }]   request: DER OCSPRequest, urls from authority information access
+const asiceLT: Buffer = addValidationData(asiceT, { caCertPath, tsaCertPath, crls: [crlBytes], ocspResponses: [ocspBytes] });
 
 // Verification.
 const seal = verifySeal(asiceLT, { caCertPath, tsaCertPath, expectedSubject });  // tsaCertPath: required for a time-stamped seal
-// Below level LT, the revocation data come from the caller: verifySeal(asiceT, { …, crls }).
+// Below level LT, the revocation data come from the caller: verifySeal(asiceT, { …, crls, ocspResponses }).
 // At level LT, CRLs of the caller are used besides those of the seal: a newer one can tell a revocation.
 seal.isValid();            // structure, algorithms, digests, signature, trust, time-stamp, revocation
 seal.getLevel();           // 'B', 'T' or 'LT'
@@ -173,7 +174,8 @@ The API follows the conventions of `XMLDSigToken`: synchronous, files given as p
 - **A revoked time-stamping authority** (RFC 3161, 4): a revocation after the time-stamp leaves its tokens valid only if the CRL gives a reason that is not a compromise of a key (`keyCompromise`, `cACompromise`, `aACompromise`); without a reason, every token of the authority is distrusted, whatever its date.
 - **Level LT is self-sufficient**: the validation data a seal embeds must tell the status of every certificate by themselves, or the seal is invalid. CRLs given by the caller are used besides them, so that a revocation published since is seen. `getLevel()` returns `'LT'` from the structure of the seal when it is verified with `revocation: false`.
 - **The CRLs used** are complete and direct: a delta CRL, an indirect CRL, a CRL restricted to some reasons or a critical extension not known make the CRL unusable, and the caller who gave it gets an exception. A CRL restricted to end-entity or to CA certificates (issuing distribution point) covers those only.
-- **CRLs and OCSP responses are signed**: their signature is verified, by the issuing CA or by a responder it delegated (`id-kp-OCSPSigning`), with the algorithm policy of the seals.
+- **CRLs and OCSP responses are signed**: their signature is verified, with the algorithm policy of the seals. A CRL is signed by the CA that issued the certificate. An OCSP response is signed by that CA, or by a responder it delegated (RFC 6960, 4.2.2.2): a certificate it issued directly, of extended key usage `id-kp-OCSPSigning`, valid when the response was produced. The delegated responder must carry `id-pkix-ocsp-nocheck` (4.2.2.2.1): the library does not check the revocation of responders. A response whose status is `unknown`, or about another certificate, tells nothing.
+- **OCSP requests** identify the certificate by SHA-1 hashes of the name and of the key of its issuer, as the lightweight profile requires (RFC 5019, 2.1.1) and as responders expect: an identifier, not a signature. They have no nonce: the responses of a seal are kept, and the date rules above, not a nonce, tell whether a response counts. Responses with a CertID by SHA-256, SHA-384 or SHA-512 are accepted too. An OCSP response counts by the `thisUpdate` of its answer, as a CRL; the archive cutoff (4.4.4) plays the part of `ExpiredCertsOnCRL`.
 - **The trust in the time-stamping authority** is declared by the verifier (`tsaCertPath`), as the trust in the signer is (`caCertPath`). A time-stamp of an authority the verifier does not trust makes the seal invalid, not a level B seal.
 - The checks of the tokens apply: algorithm policy, canonicalization guards, no DOCTYPE, limited depth, one signature per signature file.
 
@@ -235,6 +237,7 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 - **A trust anchor of our own**: DSS imports as trusted every certificate of the keystore named by `trusted.source.keystore.type`, `.filename` and `.password` in a file `dss-custom.properties` of its class path (`DSSBeanConfig.trustedCertificateSource()`). With the root CA of the tests of this library in such a keystore, a container signed with the test signing key is no longer reported without a trust anchor.
 - **Seals of this library at level LT**: `XAdES-BASELINE-LT`, `TOTAL_PASSED`, the three CRLs of the seal (intermediate, root, root of the time-stamping authority) read from it (origin `INPUT_DOCUMENT`), with RSA 3072 and P-256 signers. DSS also fetches the CRL of the root of the time-stamping authority from its distribution point (origin `EXTERNAL`), the CRL that tells the status of the authority, which the seal embeds too.
 - **Seals of level LT whose CRLs DSS cannot reach** (a branch of the test PKI whose distribution points name `offline.ezxmlseal.test`, which does not resolve on the network of DSS): `TOTAL_PASSED` by the three CRLs of the seal alone (origin `INPUT_DOCUMENT`, none `EXTERNAL`), the CRLs current or past their next update. The same seal at level T is `INDETERMINATE`, "No revocation data found for the certificate!": level LT is what makes it valid for a third party without network.
+- **OCSP responses embedded in a seal of level LT** (the offline branch, the signer by a response of its CA, the other certificates by CRLs): `TOTAL_PASSED`, by the three revocation data of the seal (origin `INPUT_DOCUMENT`).
 - **The freshness of the revocation data is not checked by the default policy of DSS**: "Is the revocation information fresh for the certificate?" is `IGNORED`. A seal of level LT whose CRLs were issued before its time-stamp, built by hand, is `TOTAL_PASSED`, as long as the CRLs were issued within the validity of the certificates. This library is stricter: such CRLs do not tell the status at the time of the time-stamp, which a revocation between their issue and the time-stamp would change, and the seal is invalid.
 - **With the CRLs of the test PKI served at `pki.ezxmlseal.test`**, the seals of the tests are `TOTAL_PASSED` at levels B and T; a signer listed in the CRL of the intermediate gives `INDETERMINATE`, `REVOKED_NO_POE`, "The certificate is revoked!". DSS keeps the CRLs it fetched in a cache until their next update, at most three hours by default (`cache.crl.max.next.update`): `bin/dss` brings it down to one second, so that a CRL published again is seen.
 - **Revocation is required by the default policy of DSS, at levels B and T alike.** With the test root CA as a trust anchor, the container signed with the test signing key is `INDETERMINATE`, `CERTIFICATE_CHAIN_GENERAL_FAILURE`, "No revocation data found for the certificate!". A third party validating with DSS therefore needs to reach revocation data for the signing certificate: a CA whose certificates name a CRL distribution point or an OCSP responder that answers, or revocation data embedded in the seal (level LT).
@@ -242,4 +245,4 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 ## Open points
 
 - **Public time-stamping authorities**: which ones answer without an account, and whether their certificates carry the revocation data level LT needs.
-- **OCSP**: the certificates of the test PKI name a responder, which the library does not use yet; CRLs alone are checked.
+- **OCSP fetched by DSS**: the tests give DSS OCSP responses embedded in the seals only. `bin/dss` serves files, and an OCSP responder answers a POST: the certificates of the test PKI name one at `pki.ezxmlseal.test/ocsp`, which nothing answers yet.

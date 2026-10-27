@@ -146,7 +146,7 @@ describe('the addition of the validation data', () => {
     ['no CRL of the time-stamping authority', () => extended(original, currentCrls().slice(0, 2)), /No revocation data for the certificate "[^"]*Time-Stamping Unit[^"]*": no CRL of its issuer/],
     ['a CRL issued before the time-stamp', () => extended(original, [makeCrl({ thisUpdate: secondsAgo(30) }), ...currentCrls().slice(1)]), /RSA 3072 Seal Dept[^"]*" issued after the time-stamp/],
     ['the signer revoked before the time-stamp', () => extended(original, currentCrls([{ cert: 'rsa3072', date: secondsAgo(25) }])), /the seal is not valid. The certificate .* is revoked since .*, before the time-stamp/],
-    ['no option crls', () => addValidationData(original, TRUST as never), /'crls' is required/],
+    ['no option crls nor ocspResponses', () => addValidationData(original, TRUST as never), /'crls' or 'ocspResponses' is required/],
     ['no option tsaCertPath', () => addValidationData(original, { caCertPath: ROOT, crls: currentCrls() } as never), /'tsaCertPath' is required/],
   ];
   for (const [name, run, message] of cases) {
@@ -191,8 +191,8 @@ describe('the verification of a seal of level LT', () => {
     ['the validation data of the time-stamp removed', (x) => x.replace(/<xades141:TimeStampValidationData.*<\/xades141:TimeStampValidationData>/, ''), /do not suffice. No revocation data for the certificate "[^"]*Time-Stamping Unit/],
     ['a CRL that is not one', (x) => x.replace(/<xades:EncapsulatedCRLValue>[^<]+</, '<xades:EncapsulatedCRLValue>AAAA<'), /A CRL of the validation data of the seal cannot be used. CRL: /],
     ['a certificate that is not one', (x) => x.replace(/<xades:EncapsulatedX509Certificate>[^<]+</, '<xades:EncapsulatedX509Certificate>AAAA<'), /A certificate of the validation data of the seal cannot be read/],
-    ['OCSP responses', (x) => x.replace('</xades:CRLValues>', '</xades:CRLValues><xades:OCSPValues><xades:EncapsulatedOCSPValue>AAAA</xades:EncapsulatedOCSPValue></xades:OCSPValues>'), /OCSP responses, which this library does not check yet/],
-    ['revocation values without CRLs', (x) => x.replace(/(<xades:RevocationValues[^>]*>)<xades:CRLValues>(?:(?!<\/xades:RevocationValues>).)*(<\/xades:RevocationValues><\/xades:UnsignedSignatureProperties>)/, '$1$2'), /Missing xades:CRLValues in xades:RevocationValues/],
+    ['an OCSP response that is not one', (x) => x.replace('</xades:CRLValues>', '</xades:CRLValues><xades:OCSPValues><xades:EncapsulatedOCSPValue>AAAA</xades:EncapsulatedOCSPValue></xades:OCSPValues>'), /An OCSP response of the validation data of the seal cannot be used/],
+    ['revocation values without CRLs', (x) => x.replace(/(<xades:RevocationValues[^>]*>)<xades:CRLValues>(?:(?!<\/xades:RevocationValues>).)*(<\/xades:RevocationValues><\/xades:UnsignedSignatureProperties>)/, '$1$2'), /Missing xades:CRLValues or xades:OCSPValues in xades:RevocationValues/],
     ['the validation data of the time-stamp after those of the signer', (x) => {
       const data = /<xades141:TimeStampValidationData.*<\/xades141:TimeStampValidationData>/.exec(x)?.[0] as string;
       return x.replace(data, '').replace('</xades:UnsignedSignatureProperties>', `${data}</xades:UnsignedSignatureProperties>`);

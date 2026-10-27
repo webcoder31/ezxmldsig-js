@@ -21,6 +21,7 @@
 import { TAG, childrenOf, decodeBoolean, decodeOid, decodeSmallInteger, decodeUnsigned, readElement, reencode, type Element } from '../der.js';
 import type { X509Cert } from '../x509.js';
 import { decodeTime, sequenceOf, verifySignature } from './pkix.js';
+import type { RevocationSource } from './revocation.js';
 
 const EXTENSION = {
   AUTHORITY_KEY_ID: '2.5.29.35',
@@ -262,4 +263,17 @@ export function crlCovers(crl: Crl, certificate: X509Cert, issuer: X509Cert): st
 /** The revocation of a certificate in a CRL, or null if the CRL does not list it. */
 export function revocationOf(crl: Crl, certificate: X509Cert): Revocation | null {
   return crl.revoked.get(certificate.getSerialNumber().toString('hex')) ?? null;
+}
+
+/** A CRL as a source of revocation status. */
+export function crlSource(crl: Crl): RevocationSource {
+  return {
+    kind: 'crl',
+    der: crl.der,
+    thisUpdate: crl.thisUpdate,
+    nextUpdate: crl.nextUpdate,
+    keepsExpiredFrom: crl.expiredCertsOnCrl,
+    covers: (certificate, issuer) => crlCovers(crl, certificate, issuer),
+    revocationOf: (certificate) => revocationOf(crl, certificate),
+  };
 }

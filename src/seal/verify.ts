@@ -30,9 +30,10 @@ import { describeSource, readPem, type PemSource } from '../material.js';
 import { X509Cert, matchesName, type NameFields } from '../x509.js';
 import { loadXML } from '../xml.js';
 import * as alg from './algorithms.js';
-import { readCrl, type Crl } from './crl.js';
+import { crlSource, readCrl } from './crl.js';
+import { ocspSources, readOcspResponse } from './ocsp.js';
 import { imprintOf } from './extend.js';
-import { checkRevocation, type RevocationCheck } from './revocation.js';
+import { checkRevocation, type RevocationCheck, type RevocationSource } from './revocation.js';
 import { ASICE_MIMETYPE, ASIC_NS, MANIFEST_NS, MANIFEST_PATH, SIGNED_PROPERTIES_TYPE, XADES141_NS, XADES_NS } from './seal.js';
 import { verifyTimestampToken, type TimestampToken } from './timestamp.js';
 import { DEFAULT_ZIP_LIMITS, readZip, type ZipEntry, type ZipLimits } from './zip.js';
@@ -56,6 +57,8 @@ export interface VerifyOptions {
    * then used besides them, a newer CRL telling a revocation they do not.
    */
   readonly crls?: readonly Uint8Array[];
+  /** OCSP responses (DER), likewise. */
+  readonly ocspResponses?: readonly Uint8Array[];
   /** The limits of the reading of the container. */
   readonly limits?: ZipLimits;
 }
@@ -171,8 +174,9 @@ export interface InspectedSeal {
   readonly keyInfo: Buffer[];
   /** The DER of the certificates of the time-stamp token. */
   readonly tokenCertificates: Buffer[];
-  readonly signerCrls: readonly Crl[];
-  readonly tsaCrls: readonly Crl[];
+  /** The CRLs and OCSP responses that told the status of each chain. */
+  readonly signerSources: readonly RevocationSource[];
+  readonly tsaSources: readonly RevocationSource[];
   /** Whether the seal already has validation data. */
   readonly hasValidationData: boolean;
 }
@@ -201,17 +205,29 @@ export function inspectSeal(container: Uint8Array, options: VerifyOptions, forLe
   if (options.crls !== undefined && (!Array.isArray(options.crls) || options.crls.some((crl) => !(crl instanceof Uint8Array)))) {
     throw new Error("Seal verification: invalid option 'crls': an array of CRLs (Uint8Array).");
   }
-  const crls: Crl[] = (options.crls ?? []).map((crl) => {
-    try {
-      return readCrl(crl);
-    } catch (error) {
-      throw new Error(`Seal verification: a CRL cannot be used. ${(error as Error).message}`);
-    }
-  });
+  if (options.ocspResponses !== undefined && (!Array.isArray(options.ocspResponses) || options.ocspResponses.some((response) => !(response instanceof Uint8Array)))) {
+    throw new Error("Seal verification: invalid option 'ocspResponses': an array of OCSP responses (Uint8Array).");
+  }
+  const given: RevocationSource[] = [
+    ...(options.crls ?? []).map((crl) => {
+      try {
+        return crlSource(readCrl(crl));
+      } catch (error) {
+        throw new Error(`Seal verification: a CRL cannot be used. ${(error as Error).message}`);
+      }
+    }),
+    ...(options.ocspResponses ?? []).flatMap((response) => {
+      try {
+        return ocspSources(readOcspResponse(response));
+      } catch (error) {
+        throw new Error(`Seal verification: an OCSP response cannot be used. ${(error as Error).message}`);
+      }
+    }),
+  ];
 
   let signer: X509Cert | null = null;
   let signingTime: Date | null = null;
-  const found: Omit<InspectedSeal, 'result'> = { chain: null, tsaChain: null, keyInfo: [], tokenCertificates: [], signerCrls: [], tsaCrls: [], hasValidationData: false };
+  const found: Omit<InspectedSeal, 'result'> = { chain: null, tsaChain: null, keyInfo: [], tokenCertificates: [], signerSources: [], tsaSources: [], hasValidationData: false };
   const failed = (error: string): InspectedSeal => ({ ...found, result: new SealVerification({ error, signingTime, signer }) });
   try {
     const { files, signatureFile } = readContainer(Buffer.from(container), options.limits ?? DEFAULT_ZIP_LIMITS);
@@ -264,26 +280,26 @@ export function inspectSeal(container: Uint8Array, options: VerifyOptions, forLe
       const now = new Date();
       const signerCheck: RevocationCheck = { now, issuedAfter: timestampTime, time: timestampTime };
       const tsaCheck: RevocationCheck = { now, issuedAfter: validationData === null && !forLevelLT ? null : timestampTime, time: timestampTime, authority: true };
-      const run = (pool: readonly Crl[]) => {
+      const run = (pool: readonly RevocationSource[]) => {
         const ofSigner = checkRevocation(chain, pool, signerCheck);
         const ofAuthority = tsaChain === null ? null : checkRevocation(tsaChain, pool, tsaCheck);
-        return { error: ofSigner.error ?? ofAuthority?.error ?? null, signerCrls: ofSigner.used, tsaCrls: ofAuthority?.used ?? [] };
+        return { error: ofSigner.error ?? ofAuthority?.error ?? null, signerSources: ofSigner.used, tsaSources: ofAuthority?.used ?? [] };
       };
       if (validationData !== null) {
         // Level LT: the embedded data must suffice by themselves.
-        const own = run(validationData.crls);
+        const own = run(validationData.sources);
         if (own.error !== null) {
           invalid(`The validation data of the seal do not suffice. ${own.error}`);
         }
-        Object.assign(found, { signerCrls: own.signerCrls, tsaCrls: own.tsaCrls });
+        Object.assign(found, { signerSources: own.signerSources, tsaSources: own.tsaSources });
       }
-      if (validationData === null || crls.length > 0) {
-        const all = run([...(validationData?.crls ?? []), ...crls]);
+      if (validationData === null || given.length > 0) {
+        const all = run([...(validationData?.sources ?? []), ...given]);
         if (all.error !== null) {
           invalid(`${all.error}${validationData === null ? ' (the option revocation: false verifies the seal without revocation.)' : ''}`);
         }
         if (validationData === null) {
-          Object.assign(found, { signerCrls: all.signerCrls, tsaCrls: all.tsaCrls });
+          Object.assign(found, { signerSources: all.signerSources, tsaSources: all.tsaSources });
         }
       }
     }
@@ -298,7 +314,7 @@ export function inspectSeal(container: Uint8Array, options: VerifyOptions, forLe
 }
 
 /** The validation data the seal embeds, read. */
-function readValidationData(data: EmbeddedData): { certificates: X509Cert[]; crls: Crl[] } {
+function readValidationData(data: EmbeddedData): { certificates: X509Cert[]; sources: RevocationSource[] } {
   let certificates: X509Cert[];
   try {
     certificates = data.certificates.map((der) => new X509Cert(X509Cert.derToPem(der) as string));
@@ -307,12 +323,19 @@ function readValidationData(data: EmbeddedData): { certificates: X509Cert[]; crl
   }
   const crls = data.crls.map((der) => {
     try {
-      return readCrl(der);
+      return crlSource(readCrl(der));
     } catch (error) {
       invalid(`A CRL of the validation data of the seal cannot be used. ${(error as Error).message}`);
     }
   });
-  return { certificates, crls };
+  const responses = data.ocspResponses.flatMap((der) => {
+    try {
+      return ocspSources(readOcspResponse(der));
+    } catch (error) {
+      invalid(`An OCSP response of the validation data of the seal cannot be used. ${(error as Error).message}`);
+    }
+  });
+  return { certificates, sources: [...crls, ...responses] };
 }
 
 function readCertificates(source: unknown, name: string): PemSource[] {
@@ -428,6 +451,7 @@ interface ReadTimestamp {
 interface EmbeddedData {
   certificates: Buffer[];
   crls: Buffer[];
+  ocspResponses: Buffer[];
 }
 
 interface ReadSignature {
@@ -518,18 +542,19 @@ function readSignature(content: Buffer, files: Map<string, Buffer>): ReadSignatu
       invalid('The xades141:TimeStampValidationData of the seal is empty.');
     }
     if (holders.length > 0) {
-      validationData = { certificates: [], crls: [] };
+      validationData = { certificates: [], crls: [], ocspResponses: [] };
       for (const holder of holders) {
         if (holder.localName === 'CertificateValues') {
           const values = sequence(holder, [[XADES_NS, 'EncapsulatedX509Certificate', 1, Infinity]]).get('EncapsulatedX509Certificate') as Element[];
           validationData.certificates.push(...values.map((value) => encapsulated(value, 'an EncapsulatedX509Certificate')));
         } else {
           const kinds = sequence(holder, [[XADES_NS, 'CRLValues', 0, 1], [XADES_NS, 'OCSPValues', 0, 1]]);
-          if ((kinds.get('OCSPValues') as Element[]).length > 0) {
-            invalid('The seal embeds OCSP responses, which this library does not check yet.');
+          if ((kinds.get('CRLValues') as Element[]).length + (kinds.get('OCSPValues') as Element[]).length === 0) {
+            invalid('Missing xades:CRLValues or xades:OCSPValues in xades:RevocationValues.');
           }
-          if ((kinds.get('CRLValues') as Element[]).length === 0) {
-            invalid('Missing xades:CRLValues in xades:RevocationValues.');
+          for (const values of kinds.get('OCSPValues') as Element[]) {
+            const responses = sequence(values, [[XADES_NS, 'EncapsulatedOCSPValue', 1, Infinity]]).get('EncapsulatedOCSPValue') as Element[];
+            validationData.ocspResponses.push(...responses.map((value) => encapsulated(value, 'an EncapsulatedOCSPValue')));
           }
           for (const values of kinds.get('CRLValues') as Element[]) {
             const crls = sequence(values, [[XADES_NS, 'EncapsulatedCRLValue', 1, Infinity]]).get('EncapsulatedCRLValue') as Element[];

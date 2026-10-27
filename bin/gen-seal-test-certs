@@ -83,6 +83,22 @@ subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid
 crlDistributionPoints = URI:$PKI/tsa-root.crl
 
+[ocsp]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = OCSPSigning
+noCheck = ignored
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+
+[ocsp_checked]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = OCSPSigning
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+crlDistributionPoints = URI:$PKI/intermediate.crl
+
 [intermediate_offline]
 basicConstraints = critical, CA:TRUE, pathlen:0
 keyUsage = critical, keyCertSign, cRLSign
@@ -153,6 +169,11 @@ issue rsa1024 "$(subject 'RSA 1024 Seal Dept')" seal "$RSA1024" "$WORK_DIR/inter
 issue revoked "$(subject 'Revoked Seal Dept')" seal "$P256" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
 issue p256 "$(subject 'P-256 Seal Dept')" seal "$P256" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
 issue p384 "$(subject 'P-384 Seal Dept')" seal "$P384" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
+
+# Responders the intermediate delegates OCSP to: one the clients need not
+# check (id-pkix-ocsp-nocheck), one without that extension.
+issue ocsp "$(subject 'OCSP Responder')" ocsp "$P256" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
+issue ocsp-checked "$(subject 'OCSP Responder Without No Check')" ocsp_checked "$P256" "$WORK_DIR/intermediate.cert.pem" "$WORK_DIR/intermediate.key.pem"
 
 # The branch whose CRLs nobody serves: an intermediate CA under the root,
 # a signer under it, a time-stamping authority under the root of the
