@@ -27,6 +27,8 @@ import { writeZip } from './zip.js';
 
 export const ASIC_NS = 'http://uri.etsi.org/02918/v1.2.1#';
 export const XADES_NS = 'http://uri.etsi.org/01903/v1.3.2#';
+/** The namespace of the properties XAdES 1.4.1 added, such as TimeStampValidationData. */
+export const XADES141_NS = 'http://uri.etsi.org/01903/v1.4.1#';
 export const MANIFEST_NS = 'urn:oasis:names:tc:opendocument:xmlns:manifest:1.0';
 export const SIGNED_PROPERTIES_TYPE = 'http://uri.etsi.org/01903#SignedProperties';
 export const ASICE_MIMETYPE = 'application/vnd.etsi.asic-e+zip';

@@ -43,8 +43,17 @@ const KNOWN_CRL_EXTENSIONS: ReadonlySet<string> = new Set([
 ]);
 const KNOWN_ENTRY_EXTENSIONS: ReadonlySet<string> = new Set([EXTENSION.REASON_CODE, EXTENSION.INVALIDITY_DATE, EXTENSION.HOLD_INSTRUCTION_CODE]);
 
+const ENUMERATED = 0x0a;
+
 /** The PEM label of a CRL. */
 const PEM = /-----BEGIN X509 CRL-----([\s\S]*?)-----END X509 CRL-----/;
+
+/** The revocation of a certificate in a CRL. */
+export interface Revocation {
+  readonly date: Date;
+  /** The reason code of the entry (RFC 5280, 5.3.1), or null if it has none. */
+  readonly reason: number | null;
+}
 
 /** A CRL, read but not verified. */
 export interface Crl {
@@ -54,8 +63,8 @@ export interface Crl {
   readonly issuer: Buffer;
   readonly thisUpdate: Date;
   readonly nextUpdate: Date | null;
-  /** The revoked certificates: their serial number (hexadecimal) and revocation date. */
-  readonly revoked: ReadonlyMap<string, Date>;
+  /** The revoked certificates, by their serial number (hexadecimal). */
+  readonly revoked: ReadonlyMap<string, Revocation>;
   /** The scope given by its issuing distribution point. */
   readonly onlyUserCerts: boolean;
   readonly onlyCACerts: boolean;
@@ -106,15 +115,18 @@ function parse(der: Buffer): Crl {
   if (optional[0] !== undefined && (optional[0].tag === TAG.UTC_TIME || optional[0].tag === TAG.GENERALIZED_TIME)) {
     nextUpdate = decodeTime(optional.shift() as Element);
   }
-  const revoked = new Map<string, Date>();
+  const revoked = new Map<string, Revocation>();
   if (optional[0]?.tag === TAG.SEQUENCE) {
     for (const entry of childrenOf(optional.shift() as Element, TAG.SEQUENCE)) {
       const [serial, date, entryExtensions] = sequenceOf(entry, 'revoked certificate');
       if (serial === undefined || date === undefined) {
         throw new Error('malformed revoked certificate.');
       }
+      let reason: number | null = null;
       for (const extension of entryExtensions === undefined ? [] : readExtensions(entryExtensions)) {
-        if (extension.oid === EXTENSION.CERTIFICATE_ISSUER) {
+        if (extension.oid === EXTENSION.REASON_CODE) {
+          reason = readReasonCode(extension.value);
+        } else if (extension.oid === EXTENSION.CERTIFICATE_ISSUER) {
           throw new Error('indirect CRLs are not supported.');
         }
         if (extension.critical && !KNOWN_ENTRY_EXTENSIONS.has(extension.oid)) {
@@ -125,7 +137,7 @@ function parse(der: Buffer): Crl {
       if (revoked.has(key)) {
         throw new Error('a certificate is listed twice.');
       }
-      revoked.set(key, decodeTime(date));
+      revoked.set(key, { date: decodeTime(date), reason });
     }
   }
   let onlyUserCerts = false;
@@ -194,6 +206,15 @@ function readIssuingDistributionPoint(value: Buffer): { onlyUserCerts: boolean; 
   return { onlyUserCerts, onlyCACerts };
 }
 
+/** CRLReason (RFC 5280, 5.3.1): an ENUMERATED of one byte. */
+function readReasonCode(value: Buffer): number {
+  const element = readElement(value);
+  if (element.tag !== ENUMERATED || element.content.length !== 1 || (element.content[0] as number) > 10) {
+    throw new Error('malformed reason code.');
+  }
+  return element.content[0] as number;
+}
+
 function readExtensions(element: Element): { oid: string; critical: boolean; value: Buffer }[] {
   return childrenOf(element, TAG.SEQUENCE).map((extension) => {
     const fields = sequenceOf(extension, 'Extension');
@@ -238,7 +259,7 @@ export function crlCovers(crl: Crl, certificate: X509Cert, issuer: X509Cert): st
   return valid ? null : 'its signature is not valid';
 }
 
-/** The revocation date of a certificate in a CRL, or null if the CRL does not list it. */
-export function revocationDate(crl: Crl, certificate: X509Cert): Date | null {
+/** The revocation of a certificate in a CRL, or null if the CRL does not list it. */
+export function revocationOf(crl: Crl, certificate: X509Cert): Revocation | null {
   return crl.revoked.get(certificate.getSerialNumber().toString('hex')) ?? null;
 }

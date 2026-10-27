@@ -146,7 +146,8 @@ describe('attacks on a time-stamped seal', () => {
     ['another canonicalization than the one time-stamped', (x) => x.replace(`xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Algorithm="${alg.EXC_C14N}"/><xades:Encapsulated`, 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><xades:Encapsulated'), /not over the signature value/],
     ['an XML encoding of the token', (x) => x.replace('<xades:EncapsulatedTimeStamp>', '<xades:EncapsulatedTimeStamp Encoding="http://uri.etsi.org/01903/v1.2.2#XER">'), /Unsupported encoding/],
     ['two time-stamps', (x) => x.replace(/(<xades:SignatureTimeStamp.*<\/xades:SignatureTimeStamp>)/, (t) => t + t.replace(/ Id="[^"]+"/, '')), /Too many xades:SignatureTimeStamp/],
-    ['an unknown unsigned property', (x) => x.replace('</xades:UnsignedSignatureProperties>', '<xades:CertificateValues/></xades:UnsignedSignatureProperties>'), /Unexpected or misplaced element xades:CertificateValues/],
+    ['an unsigned property this library does not process', (x) => x.replace('</xades:UnsignedSignatureProperties>', '<xades:CompleteRevocationRefs/></xades:UnsignedSignatureProperties>'), /Unexpected or misplaced element xades:CompleteRevocationRefs/],
+    ['empty certificate values', (x) => x.replace('</xades:UnsignedSignatureProperties>', '<xades:CertificateValues/></xades:UnsignedSignatureProperties>'), /Missing xades:EncapsulatedX509Certificate/],
   ];
   for (const [name, change, message] of cases) {
     test(name, () => {

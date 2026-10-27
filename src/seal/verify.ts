@@ -32,8 +32,8 @@ import { loadXML } from '../xml.js';
 import * as alg from './algorithms.js';
 import { readCrl, type Crl } from './crl.js';
 import { imprintOf } from './extend.js';
-import { checkRevocation } from './revocation.js';
-import { ASICE_MIMETYPE, ASIC_NS, MANIFEST_NS, MANIFEST_PATH, SIGNED_PROPERTIES_TYPE, XADES_NS } from './seal.js';
+import { checkRevocation, type RevocationCheck } from './revocation.js';
+import { ASICE_MIMETYPE, ASIC_NS, MANIFEST_NS, MANIFEST_PATH, SIGNED_PROPERTIES_TYPE, XADES141_NS, XADES_NS } from './seal.js';
 import { verifyTimestampToken, type TimestampToken } from './timestamp.js';
 import { DEFAULT_ZIP_LIMITS, readZip, type ZipEntry, type ZipLimits } from './zip.js';
 
@@ -50,11 +50,18 @@ export interface VerifyOptions {
    * without, which `isRevocationChecked()` then tells.
    */
   readonly revocation?: boolean;
-  /** CRLs, in DER or PEM, for the certificates of the signer and of the time-stamping authority. */
+  /**
+   * CRLs, in DER or PEM, for the certificates of the signer and of the
+   * time-stamping authority. A seal of level LT embeds its own: these are
+   * then used besides them, a newer CRL telling a revocation they do not.
+   */
   readonly crls?: readonly Uint8Array[];
   /** The limits of the reading of the container. */
   readonly limits?: ZipLimits;
 }
+
+/** The level of a seal (EN 319 132-1, 6.1). */
+export type SealLevel = 'B' | 'T' | 'LT';
 
 /** A file the seal covers. */
 export interface SealedFile {
@@ -71,10 +78,12 @@ export class SealVerification {
   readonly #signer: X509Cert | null;
   readonly #revocationChecked: boolean;
   readonly #timestampTime: Date | null;
+  readonly #level: SealLevel | null;
 
   /** @internal */
-  constructor(result: { error: string | null; files?: SealedFile[]; signingTime?: Date | null; signer?: X509Cert | null; revocationChecked?: boolean; timestampTime?: Date | null }) {
+  constructor(result: { error: string | null; files?: SealedFile[]; signingTime?: Date | null; signer?: X509Cert | null; revocationChecked?: boolean; timestampTime?: Date | null; level?: SealLevel }) {
     this.#error = result.error;
+    this.#level = result.error === null ? result.level ?? null : null;
     this.#timestampTime = result.error === null ? result.timestampTime ?? null : null;
     this.#files = result.error === null ? Object.freeze([...(result.files ?? [])]) : [];
     this.#signingTime = result.signingTime ?? null;
@@ -92,9 +101,13 @@ export class SealVerification {
     return this.#error;
   }
 
-  /** The level of the seal: 'B', or 'T' if it has a signature time-stamp; null if it is not valid. */
-  getLevel(): 'B' | 'T' | null {
-    return this.#error !== null ? null : this.#timestampTime === null ? 'B' : 'T';
+  /**
+   * The level of the seal: 'B'; 'T' if it has a signature time-stamp; 'LT'
+   * if it also embeds the data that validate it (checked to suffice, unless
+   * verified with revocation: false); null if it is not valid.
+   */
+  getLevel(): SealLevel | null {
+    return this.#level;
   }
 
   /** The time the signer claims (SigningTime): not a proven one. */
@@ -142,6 +155,36 @@ const CANONICALIZATIONS: ReadonlySet<string> = new Set([alg.EXC_C14N, C14N]);
  *   `getError()`.
  */
 export function verifySeal(container: Uint8Array, options: VerifyOptions): SealVerification {
+  return inspectSeal(container, options).result;
+}
+
+/**
+ * @internal What the verification of a seal found, for its extension to
+ * level LT: the chains, the certificates the signature and its time-stamp
+ * already hold, and the CRLs that told the status of each chain.
+ */
+export interface InspectedSeal {
+  readonly result: SealVerification;
+  readonly chain: X509Cert[] | null;
+  readonly tsaChain: X509Cert[] | null;
+  /** The DER of the certificates of ds:KeyInfo. */
+  readonly keyInfo: Buffer[];
+  /** The DER of the certificates of the time-stamp token. */
+  readonly tokenCertificates: Buffer[];
+  readonly signerCrls: readonly Crl[];
+  readonly tsaCrls: readonly Crl[];
+  /** Whether the seal already has validation data. */
+  readonly hasValidationData: boolean;
+}
+
+/**
+ * @internal verifySeal(), with what the extension of a seal needs.
+ *
+ * @param forLevelLT Whether the CRLs of the time-stamping authority are
+ *   chosen as level LT needs them, issued after the time-stamp, rather than
+ *   current.
+ */
+export function inspectSeal(container: Uint8Array, options: VerifyOptions, forLevelLT = false): InspectedSeal {
   if (!(container instanceof Uint8Array)) {
     throw new Error('Seal verification: the container must be bytes (Uint8Array).');
   }
@@ -168,23 +211,30 @@ export function verifySeal(container: Uint8Array, options: VerifyOptions): SealV
 
   let signer: X509Cert | null = null;
   let signingTime: Date | null = null;
+  const found: Omit<InspectedSeal, 'result'> = { chain: null, tsaChain: null, keyInfo: [], tokenCertificates: [], signerCrls: [], tsaCrls: [], hasValidationData: false };
+  const failed = (error: string): InspectedSeal => ({ ...found, result: new SealVerification({ error, signingTime, signer }) });
   try {
     const { files, signatureFile } = readContainer(Buffer.from(container), options.limits ?? DEFAULT_ZIP_LIMITS);
     const signature = readSignature(signatureFile, files);
     signer = signature.signer;
     signingTime = signature.signingTime;
+    const validationData = signature.validationData === null ? null : readValidationData(signature.validationData);
 
     // The signature time-stamp proves that the signature existed at its
     // time: the certificates of the signer are checked at that time. The
-    // certificate of the authority is checked at the current date (level LT
-    // will embed what checks it at the time of the time-stamp).
+    // certificate of the authority is checked at the current date: only a
+    // time-stamp over the time-stamp (level LTA) would check it at an
+    // earlier one.
     let timestampTime: Date | null = null;
     let tsaChain: X509Cert[] | null = null;
+    let tokenCertificates: Buffer[] = [];
     if (signature.timestamp !== null) {
       if (tsaCerts === null) {
         invalid("The seal is time-stamped: the option 'tsaCertPath' is needed to trust its time-stamping authority.");
       }
-      ({ time: timestampTime, chain: tsaChain } = checkTimestamp(signature.timestamp, tsaCerts));
+      ({ time: timestampTime, chain: tsaChain, certificates: tokenCertificates } = checkTimestamp(signature.timestamp, tsaCerts, validationData?.certificates ?? []));
+    } else if (validationData !== null) {
+      invalid('The seal has validation data but no signature time-stamp: level LT is time-stamped.');
     }
 
     // Without time-stamp, the trust in the signer is checked at the current
@@ -194,7 +244,8 @@ export function verifySeal(container: Uint8Array, options: VerifyOptions): SealV
     if (!certificate.canSign()) {
       invalid('The key usage of the signing certificate does not allow signing.');
     }
-    const chain = certificate.getTrustedChain(caCerts, { untrusted: signature.chain, ...(timestampTime === null ? {} : { at: timestampTime }) });
+    const untrusted = [...signature.chain, ...(validationData?.certificates ?? [])];
+    const chain = certificate.getTrustedChain(caCerts, { untrusted, ...(timestampTime === null ? {} : { at: timestampTime }) });
     if (chain === null) {
       invalid(`The signing certificate is not trusted: no valid chain up to a trusted CA certificate${timestampTime === null ? '' : ' at the time of the time-stamp'}.`);
     }
@@ -204,21 +255,64 @@ export function verifySeal(container: Uint8Array, options: VerifyOptions): SealV
         invalid('The subject of the signing certificate is not the expected one.');
       }
     }
+    Object.assign(found, { chain, tsaChain, keyInfo: signature.keyInfo, tokenCertificates, hasValidationData: validationData !== null });
+
     if (revocation) {
+      // The signer: from the time of the time-stamp, if any. The
+      // time-stamping authority: at the current date, unless the seal embeds
+      // its validation data, which are no longer current when it is verified.
       const now = new Date();
-      const error = checkRevocation(chain, crls, timestampTime === null ? { kind: 'current', now } : { kind: 'timestamp', time: timestampTime, now })
-        ?? (tsaChain === null ? null : checkRevocation(tsaChain, crls, { kind: 'current', now }));
-      if (error !== null) {
-        invalid(`${error} (the option revocation: false verifies the seal without revocation.)`);
+      const signerCheck: RevocationCheck = { now, issuedAfter: timestampTime, time: timestampTime };
+      const tsaCheck: RevocationCheck = { now, issuedAfter: validationData === null && !forLevelLT ? null : timestampTime, time: timestampTime, authority: true };
+      const run = (pool: readonly Crl[]) => {
+        const ofSigner = checkRevocation(chain, pool, signerCheck);
+        const ofAuthority = tsaChain === null ? null : checkRevocation(tsaChain, pool, tsaCheck);
+        return { error: ofSigner.error ?? ofAuthority?.error ?? null, signerCrls: ofSigner.used, tsaCrls: ofAuthority?.used ?? [] };
+      };
+      if (validationData !== null) {
+        // Level LT: the embedded data must suffice by themselves.
+        const own = run(validationData.crls);
+        if (own.error !== null) {
+          invalid(`The validation data of the seal do not suffice. ${own.error}`);
+        }
+        Object.assign(found, { signerCrls: own.signerCrls, tsaCrls: own.tsaCrls });
+      }
+      if (validationData === null || crls.length > 0) {
+        const all = run([...(validationData?.crls ?? []), ...crls]);
+        if (all.error !== null) {
+          invalid(`${all.error}${validationData === null ? ' (the option revocation: false verifies the seal without revocation.)' : ''}`);
+        }
+        if (validationData === null) {
+          Object.assign(found, { signerCrls: all.signerCrls, tsaCrls: all.tsaCrls });
+        }
       }
     }
-    return new SealVerification({ error: null, files: signature.files, signingTime, signer, revocationChecked: revocation, timestampTime });
+    const level: SealLevel = timestampTime === null ? 'B' : validationData === null ? 'T' : 'LT';
+    return { ...found, result: new SealVerification({ error: null, files: signature.files, signingTime, signer, revocationChecked: revocation, timestampTime, level }) };
   } catch (error) {
     if (error instanceof InvalidSeal) {
-      return new SealVerification({ error: error.message, signingTime, signer });
+      return failed(error.message);
     }
     throw error;
   }
+}
+
+/** The validation data the seal embeds, read. */
+function readValidationData(data: EmbeddedData): { certificates: X509Cert[]; crls: Crl[] } {
+  let certificates: X509Cert[];
+  try {
+    certificates = data.certificates.map((der) => new X509Cert(X509Cert.derToPem(der) as string));
+  } catch {
+    invalid('A certificate of the validation data of the seal cannot be read.');
+  }
+  const crls = data.crls.map((der) => {
+    try {
+      return readCrl(der);
+    } catch (error) {
+      invalid(`A CRL of the validation data of the seal cannot be used. ${(error as Error).message}`);
+    }
+  });
+  return { certificates, crls };
 }
 
 function readCertificates(source: unknown, name: string): PemSource[] {
@@ -235,8 +329,14 @@ function readCertificates(source: unknown, name: string): PemSource[] {
   });
 }
 
-/** The signature time-stamp: a valid token, over this signature, of a trusted authority. Returns its time, and the chain of the authority. */
-function checkTimestamp(timestamp: ReadTimestamp, tsaCerts: PemSource[]): { time: Date; chain: X509Cert[] } {
+/**
+ * The signature time-stamp: a valid token, over this signature, of a
+ * trusted authority. Returns its time, the chain of the authority, and the
+ * certificates of the token.
+ *
+ * @param embedded The certificates of the validation data of the seal, to build the chain.
+ */
+function checkTimestamp(timestamp: ReadTimestamp, tsaCerts: PemSource[], embedded: readonly X509Cert[]): { time: Date; chain: X509Cert[]; certificates: Buffer[] } {
   let token: TimestampToken;
   try {
     token = verifyTimestampToken(timestamp.token);
@@ -252,11 +352,11 @@ function checkTimestamp(timestamp: ReadTimestamp, tsaCerts: PemSource[]): { time
   if (!imprint.equals(token.imprint)) {
     invalid('The signature time-stamp is not over the signature value of this seal.');
   }
-  const chain = token.certificate.getTrustedChain(tsaCerts, { untrusted: token.chain });
+  const chain = token.certificate.getTrustedChain(tsaCerts, { untrusted: [...token.chain, ...embedded] });
   if (chain === null) {
     invalid('The time-stamping authority is not trusted.');
   }
-  return { time: token.time, chain };
+  return { time: token.time, chain, certificates: [token.certificate, ...token.chain].map((cert) => cert.getDer()) };
 }
 
 /** The layout of the container (EN 319 162-1, 4.4.3.2, Table 5, A.1). */
@@ -324,8 +424,17 @@ interface ReadTimestamp {
   signatureValue: Element;
 }
 
+/** The DER of the certificates and CRLs a seal embeds (level LT), the time-stamp's and the signer's together. */
+interface EmbeddedData {
+  certificates: Buffer[];
+  crls: Buffer[];
+}
+
 interface ReadSignature {
   timestamp: ReadTimestamp | null;
+  validationData: EmbeddedData | null;
+  /** The DER of the certificates of ds:KeyInfo. */
+  keyInfo: Buffer[];
   files: SealedFile[];
   signingTime: Date;
   signer: X509Cert;
@@ -386,9 +495,49 @@ function readSignature(content: Buffer, files: Map<string, Buffer>): ReadSignatu
   ]);
   const unsignedProperties = (qualifyingParts.get('UnsignedProperties') ?? [])[0];
   let timestamp: { token: Buffer; canonicalization: string } | null = null;
+  let validationData: EmbeddedData | null = null;
   if (unsignedProperties !== undefined) {
     const unsignedSignature = first(sequence(unsignedProperties, [[XADES_NS, 'UnsignedSignatureProperties', 1, 1]]), 'UnsignedSignatureProperties');
-    const timestamps = sequence(unsignedSignature, [[XADES_NS, 'SignatureTimeStamp', 1, 1]]);
+    // Level LT: the validation data of the time-stamp right after it
+    // (5.5.1.2), then those of the signer (5.4.2, 5.4.3).
+    const timestamps = sequence(unsignedSignature, [
+      [XADES_NS, 'SignatureTimeStamp', 1, 1],
+      [XADES141_NS, 'TimeStampValidationData', 0, 1],
+      [XADES_NS, 'CertificateValues', 0, 1],
+      [XADES_NS, 'RevocationValues', 0, 1],
+    ]);
+    const holders = [
+      ...(timestamps.get('TimeStampValidationData') as Element[]).flatMap((element) => {
+        const parts = sequence(element, [[XADES_NS, 'CertificateValues', 0, 1], [XADES_NS, 'RevocationValues', 0, 1]]);
+        return [...(parts.get('CertificateValues') as Element[]), ...(parts.get('RevocationValues') as Element[])];
+      }),
+      ...(timestamps.get('CertificateValues') as Element[]),
+      ...(timestamps.get('RevocationValues') as Element[]),
+    ];
+    if ((timestamps.get('TimeStampValidationData') as Element[]).length > 0 && holders.length === 0) {
+      invalid('The xades141:TimeStampValidationData of the seal is empty.');
+    }
+    if (holders.length > 0) {
+      validationData = { certificates: [], crls: [] };
+      for (const holder of holders) {
+        if (holder.localName === 'CertificateValues') {
+          const values = sequence(holder, [[XADES_NS, 'EncapsulatedX509Certificate', 1, Infinity]]).get('EncapsulatedX509Certificate') as Element[];
+          validationData.certificates.push(...values.map((value) => encapsulated(value, 'an EncapsulatedX509Certificate')));
+        } else {
+          const kinds = sequence(holder, [[XADES_NS, 'CRLValues', 0, 1], [XADES_NS, 'OCSPValues', 0, 1]]);
+          if ((kinds.get('OCSPValues') as Element[]).length > 0) {
+            invalid('The seal embeds OCSP responses, which this library does not check yet.');
+          }
+          if ((kinds.get('CRLValues') as Element[]).length === 0) {
+            invalid('Missing xades:CRLValues in xades:RevocationValues.');
+          }
+          for (const values of kinds.get('CRLValues') as Element[]) {
+            const crls = sequence(values, [[XADES_NS, 'EncapsulatedCRLValue', 1, Infinity]]).get('EncapsulatedCRLValue') as Element[];
+            validationData.crls.push(...crls.map((value) => encapsulated(value, 'an EncapsulatedCRLValue')));
+          }
+        }
+      }
+    }
     const timestampParts = sequence(first(timestamps, 'SignatureTimeStamp'), [
       // Required: EN 319 132-1, 4.5, sets no default for the new signatures.
       [XMLDSIG_NS, 'CanonicalizationMethod', 1, 1],
@@ -398,12 +547,7 @@ function readSignature(content: Buffer, files: Map<string, Buffer>): ReadSignatu
     if (!CANONICALIZATIONS.has(canonicalization)) {
       invalid(`Unsupported canonicalization of the signature time-stamp: ${canonicalization}.`);
     }
-    const encapsulated = first(timestampParts, 'EncapsulatedTimeStamp');
-    const encoding = encapsulated.getAttribute('Encoding');
-    if (encoding !== null && encoding !== '' && encoding !== 'http://uri.etsi.org/01903/v1.2.2#DER') {
-      invalid(`Unsupported encoding of the signature time-stamp: ${encoding}.`);
-    }
-    timestamp = { token: base64(text(encapsulated), 'the EncapsulatedTimeStamp'), canonicalization };
+    timestamp = { token: encapsulated(first(timestampParts, 'EncapsulatedTimeStamp'), 'the EncapsulatedTimeStamp'), canonicalization };
   }
   const signedProperties = first(qualifyingParts, 'SignedProperties');
   const signedPropertiesId = attribute(signedProperties, 'Id', 'xades:SignedProperties');
@@ -548,7 +692,7 @@ function readSignature(content: Buffer, files: Map<string, Buffer>): ReadSignatu
     invalid('The signature value is not valid.');
   }
   const signatureValueElement = first(parts, 'SignatureValue');
-  return { files: sealed, signingTime, signer, chain, timestamp: timestamp === null ? null : { ...timestamp, signatureValue: signatureValueElement } };
+  return { files: sealed, signingTime, signer, chain, keyInfo: certificates, validationData, timestamp: timestamp === null ? null : { ...timestamp, signatureValue: signatureValueElement } };
 }
 
 /** The key of the signing certificate must suit the signature algorithm, with the sizes the seals accept. */
@@ -665,6 +809,15 @@ function base64(value: string, what: string): Buffer {
     invalid(`${what} is not valid base64.`);
   }
   return Buffer.from(compact, 'base64');
+}
+
+/** The DER an EncapsulatedPKIData element holds (EN 319 132-1, 5.1.3): base64, of the encoding DER, the default. */
+function encapsulated(element: Element, what: string): Buffer {
+  const encoding = element.getAttribute('Encoding');
+  if (encoding !== null && encoding !== '' && encoding !== 'http://uri.etsi.org/01903/v1.2.2#DER') {
+    invalid(`Unsupported encoding of ${what}: ${encoding}.`);
+  }
+  return base64(text(element), what);
 }
 
 /** An xsd:dateTime with a time zone, as SigningTime is written. */

@@ -51,6 +51,8 @@ export interface DssSignature {
 export interface DssReport {
   readonly containerType: string | null;
   readonly signatures: DssSignature[];
+  /** Where each revocation data DSS used comes from: INPUT_DOCUMENT (the seal), EXTERNAL (fetched)… */
+  readonly revocationOrigins: string[];
 }
 
 type Json = Record<string, any>;
@@ -91,7 +93,8 @@ export async function validateWithDss(container: Buffer, name = 'seal.asice'): P
       trusted,
     };
   });
-  return { containerType: simple['ContainerType'] ?? null, signatures };
+  const revocationOrigins = ((diagnostic['Revocation'] as Json[] | null) ?? []).map((revocation) => revocation['Origin'] as string);
+  return { containerType: simple['ContainerType'] ?? null, signatures, revocationOrigins };
 }
 
 /** The directory bin/dss serves at http://pki.ezxmlseal.test/, on the network of DSS. */

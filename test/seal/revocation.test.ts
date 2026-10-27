@@ -13,6 +13,7 @@ import { addSignatureTimestamp, timestampRequest } from '../../dist/seal/extend.
 import { createSeal } from '../../dist/seal/seal.js';
 import { verifySeal, type VerifyOptions } from '../../dist/seal/verify.js';
 import { currentCrls, extension, issuingDistributionPoint, makeCrl, opensslCaSkip, opensslCrl } from '../helpers/crl.ts';
+import { der } from '../helpers/der.ts';
 import { REVOKED, dssSkip, publishTestCrls, validateWithDss } from '../helpers/dss.ts';
 import { timestampResponse } from '../helpers/tsa.ts';
 
@@ -22,6 +23,7 @@ const TSA_ROOT = `${CERTS}/tsa-root.cert.pem`;
 const MINUTE = 60_000;
 const ago = (minutes: number) => new Date(Date.now() - minutes * MINUTE);
 const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000);
+const reason = (code: number) => extension('2.5.29.21', false, der(0x0a, Buffer.from([code])));
 
 function seal(key = 'rsa3072'): Buffer {
   return createSeal([{ name: 'contrat.pdf', content: Buffer.from('%PDF-1.4\n') }], `${CERTS}/${key}.key.pem`, `${CERTS}/${key}.cert.pem`, 'signKeyPassword', { chain: [`${CERTS}/intermediate.cert.pem`] });
@@ -65,6 +67,14 @@ describe('level B: the status at the current date', () => {
 
   test('the signer revoked, in a CRL of OpenSSL', { skip: opensslCaSkip }, () => {
     assert.match(error(container, [opensslCrl('intermediate', ['rsa3072']), root]) ?? '', /is revoked since 2026-01-01/);
+  });
+
+  test('two CRLs of the same second: the one that lists the certificate tells its status', () => {
+    const thisUpdate = new Date(Math.floor(Date.now() / 1000) * 1000 - 5000);
+    for (const order of [[0, 1], [1, 0]]) {
+      const crls = [makeCrl({ thisUpdate }), makeCrl({ thisUpdate, revoked: [{ cert: 'rsa3072', date: ago(5) }] })];
+      assert.match(error(container, [...order.map((index) => crls[index] as Buffer), root]) ?? '', /is revoked since/);
+    }
   });
 
   test('another certificate revoked', () => {
@@ -116,6 +126,7 @@ describe('CRLs this library does not use are refused', () => {
     ['a CRL restricted to some reasons', makeCrl({ extensions: [issuingDistributionPoint({ someReasons: true })] }), /restricted to some reasons/],
     ['an indirect CRL', makeCrl({ extensions: [issuingDistributionPoint({ indirect: true })] }), /indirect CRLs/],
     ['an entry of another issuer (indirect CRL)', makeCrl({ revoked: [{ cert: 'p256', date: ago(1), extensions: [extension('2.5.29.29', true, Buffer.from([0x30, 0x00]))] }] }), /indirect CRLs are not supported/],
+    ['a reason code that is not one', makeCrl({ revoked: [{ cert: 'p256', date: ago(1), extensions: [extension('2.5.29.21', false, der(0x02, Buffer.from([1])))] }] }), /malformed reason code/],
     ['bytes that are not a CRL', Buffer.from('not a CRL'), /DER: /],
   ];
   for (const [name, crl, message] of cases) {
@@ -157,6 +168,19 @@ describe('level T: the status at the time of the time-stamp', () => {
 
   test('the time-stamping authority revoked', () => {
     assert.match(error(container, [makeCrl(), makeCrl({ issuer: 'root' }), makeCrl({ issuer: 'tsa-root', revoked: [{ cert: 'tsa', date: secondsAgo(1) }] })]) ?? '', new RegExp(`The certificate ${TSA} is revoked`));
+  });
+
+  const authorityRevoked = (date: Date, extensions?: Buffer[]) => error(container, [makeCrl(), makeCrl({ issuer: 'root' }), makeCrl({ issuer: 'tsa-root', revoked: [{ cert: 'tsa', date, ...(extensions === undefined ? {} : { extensions }) }] })]);
+  test('the time-stamping authority revoked after the time-stamp, for cessation of operation (RFC 3161, 4): valid', () => {
+    assert.equal(authorityRevoked(secondsAgo(1), [reason(5)]), null);
+  });
+
+  test('the time-stamping authority revoked after the time-stamp, for a key compromise', () => {
+    assert.match(authorityRevoked(secondsAgo(1), [reason(1)]) ?? '', new RegExp(`The certificate ${TSA} is revoked since .*, after the time-stamp but for a compromise of a key`));
+  });
+
+  test('the time-stamping authority revoked before the time-stamp, for cessation of operation', () => {
+    assert.match(authorityRevoked(secondsAgo(25), [reason(5)]) ?? '', /, before the time-stamp/);
   });
 
   test('no CRL for the time-stamping authority', () => {

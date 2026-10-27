@@ -116,23 +116,23 @@ export function imprintOf(signatureValue: Element, digest: string, canonicalizat
   return createHash(digest).update(canonicalize(signatureValue, canonicalization, null, 'ds:SignatureValue'), 'utf8').digest();
 }
 
-/** The signature file of a seal, and its elements the time-stamp needs. */
-function locate(entries: ZipEntry[]): { entry: ZipEntry; doc: Document; signature: Element; signatureValue: Element; signedProperties: Element } {
+/** @internal The signature file of a seal, and its elements the time-stamp needs. */
+export function locate(entries: ZipEntry[], what = 'Time-stamp'): { entry: ZipEntry; doc: Document; signature: Element; signatureValue: Element; signedProperties: Element } {
   const files = entries.filter((e) => /^META-INF\/[^/]*signatures[^/]*\.xml$/i.test(e.name));
   if (files.length !== 1) {
-    throw new Error('Time-stamp: the container must hold one signature file.');
+    throw new Error(`${what}: the container must hold one signature file.`);
   }
   const entry = files[0] as ZipEntry;
   const doc = loadXML(entry.content, 'XAdES signature');
   const signatures = doc.getElementsByTagNameNS(XMLDSIG_NS, 'Signature');
   if (signatures.length !== 1) {
-    throw new Error('Time-stamp: the signature file must hold one ds:Signature.');
+    throw new Error(`${what}: the signature file must hold one ds:Signature.`);
   }
   const signature = signatures[0] as Element;
   const values = [...signature.childNodes].filter((n) => (n as Element).localName === 'SignatureValue' && (n as Element).namespaceURI === XMLDSIG_NS);
   const properties = signature.getElementsByTagNameNS(XADES_NS, 'SignedProperties');
   if (values.length !== 1 || properties.length !== 1) {
-    throw new Error('Time-stamp: the signature has no SignatureValue or no SignedProperties.');
+    throw new Error(`${what}: the signature has no SignatureValue or no SignedProperties.`);
   }
   return { entry, doc, signature, signatureValue: values[0] as Element, signedProperties: properties[0] as Element };
 }
