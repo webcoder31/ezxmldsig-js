@@ -192,7 +192,7 @@ TS 119 312 classifies RSA-PKCS#1 v1.5, the signature of the tokens, as a legacy 
 - accept ECDSA keys, which certificates of electronic seals on dedicated hardware often have; the XML signature value is `r || s`, not the DER encoding Node.js produces by default (`dsaEncoding: 'ieee-p1363'`);
 - digest with SHA-256, SHA-384 or SHA-512; SHA-1 and MD5 are refused.
 
-RSA-PSS has a cost for the PHP library to come: `openssl_sign()` and `openssl_verify()` take no padding parameter, in PHP 7.4 as in 8.3, so PHP cannot produce or check RSA-PSS with the OpenSSL extension alone. The PHP seals will need either the PSS encoding (RFC 8017, 9.1) written over raw RSA (`OPENSSL_NO_PADDING`), or a dependency such as phpseclib. ECDSA has no such cost.
+RSA-PSS has a cost in PHP: `openssl_sign()` and `openssl_verify()` take no padding parameter, in PHP 7.4 as in 8.3, so PHP cannot produce or check RSA-PSS with the OpenSSL extension alone. The PHP seals write the PSS encoding (RFC 8017, 9.1) over raw RSA (`OPENSSL_NO_PADDING`), rather than take a dependency such as phpseclib. ECDSA has no such cost.
 
 ## Reuse of ezxmldsig-js
 
@@ -249,7 +249,7 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 
 ## Packaging
 
-Status: in place in Node.js; in PHP, `core` and `token` in place, `seal` not written.
+Status: in place in Node.js and in PHP.
 
 ### One package, three branches
 
@@ -320,13 +320,13 @@ The rule that `core` imports neither `token` nor `seal`, and that `token` and `s
 
 - **The move is a major version**, 2.0.0 in both languages: `XMLDSigToken` and `X509Cert` change of import path (Node.js) or of namespace (PHP). The CHANGELOG gives the old and the new name of each public symbol. No alias is kept: the libraries are barely distributed (no dependent package on Packagist), and the branches start clean.
 - **The seals are experimental in 2.x**, until a review of their API: their changes may break in a minor version, which the README and the CHANGELOG say. The tokens and `core` follow semantic versioning. One version number carries both, the price of one package: a release of the seals is a release of the tokens too, with nothing changed for them.
-- **When to split after all**: in PHP, the seals need RSA-PSS, which the OpenSSL extension cannot produce. If the PHP seals take a dependency for it (such as phpseclib) rather than an encoding of their own, or need a version of PHP above that of the tokens (7.4 today), every user of the tokens would bear it: the seals would then become a package of their own in PHP, depending on the PHP package for `core`.
+- **When to split after all**: in PHP, the seals need RSA-PSS, which the OpenSSL extension cannot produce. If the PHP seals take a dependency for it (such as phpseclib) rather than an encoding of their own, or need a version of PHP above that of the tokens (7.4 today), every user of the tokens would bear it: the seals would then become a package of their own in PHP, depending on the PHP package for `core`. The PHP seals did neither: they encode RSA-PSS themselves and run on PHP 7.4, so they stay in the one package.
 
 ### Order of the work
 
 1. **Node.js, on the branch of the design**: the modules into `src/core/` and `src/token/`, `encoding.ts` and `algorithms.ts` split, the imports, `test/core/` and `test/token/`, the test of the boundaries, the three subpaths in `package.json`, the entry points of the documentation of the API (TypeDoc), the README and the CHANGELOG of 2.0.0. The whole suite passes, the interoperability with the PHP library included.
 2. **The branch merged** into `main` of ezxmldsig-js, then 2.0.0 published.
-3. **PHP**: `core` cut out of `XMLDSigToken.php`, the namespaces `core` and `token`, 2.0.0; the PHP seals later, in `seal`.
+3. **PHP**: `core` cut out of `XMLDSigToken.php`, the namespaces `core` and `token`, 2.0.0; then the PHP seals, in `seal`, 2.1.0.
 
 ## Open points
 
