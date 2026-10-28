@@ -8,7 +8,10 @@
  * reaches the CRL and OCSP of the test PKI at pki.ezxmlseal.test.
  *
  * The tests that need it are skipped, with the reason, when DSS does not
- * answer. In continuous integration (CI=true), they fail instead.
+ * answer. In continuous integration (CI=true), DSS is not started: they are
+ * skipped there unless DSS_URL is set, and then fail if DSS does not answer.
+ * A version is released after they passed against DSS (see the section
+ * "Releasing a version" of the README).
  */
 
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
@@ -21,7 +24,7 @@ export const DSS_URL = process.env['DSS_URL'] ?? 'http://127.0.0.1:8090';
 /** Why the DSS tests are skipped, or false when they run. */
 export const dssSkip: string | false = await (async () => {
   if (process.env['CI'] === 'true') {
-    return false;
+    return process.env['DSS_URL'] === undefined ? 'DSS is not started in continuous integration (set DSS_URL to run these tests).' : false;
   }
   try {
     const response = await fetch(DSS_URL, { signal: AbortSignal.timeout(3000) });
