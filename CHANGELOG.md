@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0
+## 2.0.0 (2026-10-28)
 
 The package is split into three branches, imported from their own paths: the tokens, the seals, and the core they share. It has no root any more.
 
@@ -18,6 +18,7 @@ The tokens do not change: the same options, the same verdicts and error messages
 - `@webcoder31/ezxmldsig/seal`, **experimental**: seals of files, detached XAdES baseline signatures (ETSI EN 319 132-1) in an ASiC-E container (ETSI EN 319 162-1), at levels B, T (an RFC 3161 time-stamp) and LT (the CRLs and OCSP responses embedded), checked against DSS, the validator of the European Commission. The library sends no request: it builds the requests of time-stamps, CRLs and OCSP, and the caller sends them. Its API may change in a minor version of 2.x.
 - `X509Cert` gains `getTrustedChain()`, and `isTrustedBy()` takes an optional date and untrusted intermediate certificates; it gains accessors of the DER encoding, the public key, the serial number, the raw issuer and subject, the extensions, `isCA()` and `canSignCrls()`.
 - The core holds the identifiers of RSA-PSS (`RSA_PSS_SHA256`…) and ECDSA (`ECDSA_SHA256`…), which the seals use; the tokens keep their algorithms.
+- The tests check the interoperability with the PHP library 2.0.0, split the same way into the namespaces `core` and `token`.
 
 ## 1.0.3
 

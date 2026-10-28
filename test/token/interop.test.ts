@@ -1,7 +1,7 @@
 /**
  * Interoperability, both ways:
  *
- * - with the PHP library ezxmldsig 1.2.1, under PHP 7.4 and 8.3: the
+ * - with the PHP library ezxmldsig 2.0.0, under PHP 7.4 and 8.3: the
  *   tokens it creates are analyzed here, and the tokens created here are
  *   analyzed by it, signed and encrypted, with and without audience and
  *   expiry, with several algorithms;

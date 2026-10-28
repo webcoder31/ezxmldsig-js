@@ -71,8 +71,8 @@ use webcoder31\ezxmldsig\Demo\AttackLab;
 use webcoder31\ezxmldsig\Demo\Certs;
 use webcoder31\ezxmldsig\Demo\Forge;
 use webcoder31\ezxmldsig\Demo\Receiver;
-use webcoder31\ezxmldsig\X509Cert;
-use webcoder31\ezxmldsig\XMLDSigToken;
+use webcoder31\ezxmldsig\core\X509Cert;
+use webcoder31\ezxmldsig\token\XMLDSigToken;
 
 /**
  * Gives the values of token data that are not UTF-8 text as
