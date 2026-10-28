@@ -8,10 +8,10 @@
  * reaches the CRL and OCSP of the test PKI at pki.ezxmlseal.test.
  *
  * The tests that need it are skipped, with the reason, when DSS does not
- * answer. In continuous integration (CI=true), DSS is not started: they are
- * skipped there unless DSS_URL is set, and then fail if DSS does not answer.
- * A version is released after they passed against DSS (see the section
- * "Releasing a version" of the README).
+ * answer. In continuous integration (CI=true), they are skipped unless
+ * DSS_URL is set, and then fail if DSS does not answer: the workflow
+ * .github/workflows/dss.yml starts DSS and sets DSS_URL, on each push and
+ * before each publication on npm.
  */
 
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';

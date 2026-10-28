@@ -1,9 +1,11 @@
 # Publishes the package on npm when a release is published on GitHub. The
-# tests run first. npm trusts this workflow (trusted publishing, set up in
-# the settings of the package on npmjs.com for webcoder31/ezxmldsig-js and
-# publish.yml): it proves its identity with an OpenID Connect token of
-# GitHub (permission id-token), without any npm token, and npm adds the
-# provenance of the package (this workflow, the commit it was built from).
+# tests run first, and the seal tests validated by DSS (dss.yml): nothing
+# is published unless both pass. npm trusts this workflow (trusted
+# publishing, set up in the settings of the package on npmjs.com for
+# webcoder31/ezxmldsig-js and publish.yml): it proves its identity with an
+# OpenID Connect token of GitHub (permission id-token), without any npm
+# token, and npm adds the provenance of the package (this workflow, the
+# commit it was built from).
 # Requires npm 11.5.1 or later, and a public repository.
 name: Publish
 
@@ -13,11 +15,17 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
+  dss:
+    uses: ./.github/workflows/dss.yml
+
   publish:
+    needs: dss
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       # The version published is that of package.json: a release whose tag
