@@ -28,6 +28,60 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  # The seal tests that send the seals to DSS (Digital Signature Service,
+  # the validator of the European Commission), which bin/dss runs in
+  # Docker. Its image, built by Maven from esig/dss-demonstrations, is kept
+  # in the cache of GitHub Actions (docker save), under a key that changes
+  # with bin/dss: it is built again when bin/dss changes, or when the cache
+  # has gone unused for 7 days and GitHub removed it. With DSS_URL set, a
+  # DSS test fails instead of being skipped when DSS does not answer; the
+  # job fails if any test was skipped.
+  dss:
+    runs-on: ubuntu-24.04
+    env:
+      DSS_URL: http://127.0.0.1:8090
+      IMAGE_TAR: test/.cache/dss-image.tar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Restore the image of DSS
+        id: image
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.IMAGE_TAR }}
+          key: dss-image-${{ hashFiles('bin/dss') }}
+      - name: Load the image of DSS
+        if: steps.image.outputs.cache-hit == 'true'
+        run: docker load -i "$IMAGE_TAR"
+      - name: Build the image of DSS
+        if: steps.image.outputs.cache-hit != 'true'
+        run: bin/dss build && docker save -o "$IMAGE_TAR" dss-demo:6.5.1
+      - name: Keep the image of DSS in the cache
+        if: steps.image.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.IMAGE_TAR }}
+          key: dss-image-${{ hashFiles('bin/dss') }}
+      - run: bin/dss start
+      - run: npm run build
+      - name: The seal tests with DSS, none skipped
+        run: |
+          node --test --test-reporter=spec test/seal/ocsp.test.ts test/seal/revocation.test.ts test/seal/seal.test.ts test/seal/timestamp.test.ts test/seal/validation.test.ts | tee test/.cache/dss-tests.txt
+          # A skipped test is counted by the line ℹ skipped, a skipped suite
+          # (describe) is not: the spec reporter writes it on a line of its own,
+          # that starts with ﹣.
+          if ! grep -q '^ℹ skipped 0$' test/.cache/dss-tests.txt || grep '^ *﹣' test/.cache/dss-tests.txt; then
+            echo 'Some tests or suites were skipped.' >&2
+            exit 1
+          fi
+      - name: The logs of DSS
+        if: failure()
+        run: docker logs ezxmlseal-dss 2>&1 | tail -200
+
   docs:
     runs-on: ubuntu-24.04
     steps:
