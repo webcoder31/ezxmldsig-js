@@ -249,7 +249,7 @@ Settled by tests against DSS 6.5.1, with containers that DSS built itself (its d
 
 ## Packaging
 
-Status: in place in Node.js; to do in PHP.
+Status: in place in Node.js; in PHP, `core` and `token` in place, `seal` not written.
 
 ### One package, three branches
 
@@ -305,12 +305,12 @@ import { createSeal, verifySeal } from '@webcoder31/ezxmldsig/seal';
 PHP, by namespace, with PSR-4 (one directory per namespace):
 
 ```
-src/core/       webcoder31\ezxmldsig\core     X509Cert, the policy of algorithms, canonicalization, the guards
+src/core/       webcoder31\ezxmldsig\core     X509Cert, the algorithm identifiers, the guarded XML loading and canonicalization
 src/token/      webcoder31\ezxmldsig\token    XMLDSigToken
 src/seal/       webcoder31\ezxmldsig\seal     the seals, when they are written in PHP
 ```
 
-In PHP, `core` is to be cut out of `XMLDSigToken.php`, where the policy of algorithms, the canonicalization, the guards against the attacks on XMLDSig and the loading of the trust anchors are mixed with the tokens. PHP has no equivalent of the field `exports`: the classes of `core` that are not meant for the applications are marked `@internal`.
+In PHP, `core` holds what `XMLDSigToken.php` mixed with the tokens and the seals need as well: `X509Cert`, the algorithm identifiers (`Algorithms`), the loading of XML that refuses a DOCTYPE (`Xml`), and the verifier that refuses a canonicalization that fails or is empty (`Canonicalization`). The policy of algorithms and the loading of the trust anchors stay in `token`, as in Node.js. PHP has no equivalent of the field `exports`: the classes of `core` that are not meant for the applications are marked `@internal`.
 
 ### The boundaries, checked
 
