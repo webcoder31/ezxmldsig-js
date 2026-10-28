@@ -34,6 +34,7 @@
 <li><a href="#trust-anchor">Trust anchor</a></li>
 <li><a href="#encryption">Encryption</a></li>
 <li><a href="#interoperability">Interoperability</a></li>
+<li><a href="#compatible-versions">Compatible versions</a></li>
 <li><a href="#certificates-and-keys">Certificates and keys</a></li>
 <li><a href="#options">Options</a></li>
 </ul>
@@ -41,7 +42,12 @@
 <li><a href="#demos">Demos</a></li>
 <li><a href="#differences-with-the-php-library">Differences with the PHP library</a></li>
 <li><a href="#documentation">Documentation</a></li>
-<li><a href="#development">Development</a></li>
+<li><a href="#development">Development</a>
+<ul>
+<li><a href="#what-is-checked-and-by-whom">What is checked, and by whom</a></li>
+<li><a href="#releasing-a-version">Releasing a version</a></li>
+</ul>
+</li>
 <li><a href="#security">Security</a></li>
 <li><a href="#license">License</a></li>
 </ul>
@@ -199,6 +205,62 @@
 <h3 id="interoperability" class="tsd-anchor-link">Interoperability<a href="#interoperability" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <p><strong>With the PHP library.</strong> A token created by the PHP library ezxmldsig 1.2.1 or later is valid here, and a token created here is valid for it, signed or encrypted, with every algorithm and option both libraries share; both read the same data, timestamp, identifier, audiences and expiry. The tests of this library check it, under PHP 7.4 and 8.3, and replay the attack lab of the PHP library demo: every forged token gets the same verdict from both libraries. See <a href="#differences-with-the-php-library">Differences with the PHP library</a> for the few cases where they differ.</p>
 <p><strong>The format of a token, and other libraries.</strong> The format of a token, element by element, and the code that creates and reads one with xml-crypto and xml-encryption, which the tests of this library run: see <a href="https://webcoder31.github.io/ezxmldsig-doc/interoperability/">Interoperability</a> on the documentation site. These libraries only verify a signature, with the key they are given, and only decrypt: a receiver that uses them directly must make all the other checks of <code>isSignatureValid()</code> itself.</p>
+<h3 id="compatible-versions" class="tsd-anchor-link">Compatible versions<a href="#compatible-versions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>The versions of the two libraries that work together. A pair has the same features when each library creates and verifies what the other creates and verifies: the same tokens, and the same seals when both have them. In every pair, the cases listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a> differ.</p>
+<table>
+<thead>
+<tr>
+<th>PHP library</th>
+<th>Node.js library</th>
+<th>Tokens</th>
+<th>Seals</th>
+<th>Same features</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>2.1.0</strong></td>
+<td><strong>2.0.0</strong></td>
+<td>exchanged both ways (1)</td>
+<td>exchanged both ways, experimental (2)</td>
+<td><strong>yes</strong></td>
+</tr>
+<tr>
+<td>2.0.0</td>
+<td>2.0.0</td>
+<td>exchanged both ways</td>
+<td>only in the Node.js library</td>
+<td>no</td>
+</tr>
+<tr>
+<td>1.2.1</td>
+<td>1.0.3</td>
+<td>exchanged both ways</td>
+<td>in neither library</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1.2.1</td>
+<td>1.0.2</td>
+<td>exchanged both ways</td>
+<td>in neither library</td>
+<td>no: <code>getPrettyXML()</code> comes to the Node.js library in 1.0.3</td>
+</tr>
+<tr>
+<td>1.2.0</td>
+<td>1.0.0, 1.0.1</td>
+<td>exchanged both ways, but for three defects of the PHP library 1.2.0, fixed in 1.2.1 (3)</td>
+<td>in neither library</td>
+<td>no: <code>getPrettyXML()</code> comes to the Node.js library in 1.0.3</td>
+</tr>
+</tbody>
+</table>
+<ol>
+<li>The tests of the Node.js library 2.0.0 exchange tokens with the PHP library 2.0.0; the PHP library 2.1.0 does not change the tokens.</li>
+<li>The tests of the PHP library 2.1.0 verify seals made by the Node.js library 2.0.0. The seals of the PHP library 2.1.0 were verified by the Node.js library 2.0.0 and validated by DSS by hand (see <a href="#what-is-checked-and-by-whom">What is checked, and by whom</a>).</li>
+<li>Listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</li>
+</ol>
+<p>Each pair of the table is the one the tests of these versions check. The tokens do not change from the PHP library 1.2.1 and the Node.js library 1.0.2 on: later versions exchange them too, although the tests do not check every pair. A receiver of the PHP library 1.0 or 1.1 refuses the encrypted tokens of the PHP library 1.2.0 and later, and those of every version of the Node.js library.</p>
 <h3 id="certificates-and-keys" class="tsd-anchor-link">Certificates and keys<a href="#certificates-and-keys" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <p>A token involves up to three kinds of certificates, all X.509 certificates in PEM format with <strong>RSA keys</strong>: the signing certificate of the sender, the CA certificates the recipient trusts (<code>caCertPath</code>), and, for encrypted tokens, the encryption certificate of the recipient. EC and DSA keys are refused.</p>
 <p>The signing certificate must be valid at the current date and, if it has a key usage extension, allow <code>digitalSignature</code> or <code>nonRepudiation</code>. With <code>caCertPath</code>, every certificate of the chain is also checked: validity dates, signature, and, for each issuer, basic constraints with <code>CA:TRUE</code> and a key usage that allows <code>keyCertSign</code> (see <a href="#trust-anchor">Trust anchor</a>).</p>
@@ -341,6 +403,57 @@
 <p>The PHP library, version 2.0.0, runs in the official <code>php:8.3-cli</code> and <code>php:7.4-cli</code> Docker images, through <code>bin/php-ezxmldsig</code> (see its header). The first run clones it into <code>test/.cache/</code> and installs its dependencies with Composer, in Docker. The tokens forged for the tests are altered, encrypted and signed again by the PHP library, not by the code under test. The tests also check that the PHP library emits no PHP message (warning, notice, deprecation) while it creates or analyzes a token. Without Docker, these tests are skipped, and the test runner says why; in continuous integration (<code>CI=true</code>), they fail instead.</p>
 <p>The tests of the seals also have them validated by DSS (Digital Signature Service, the validator of the European Commission), started by <code>bin/dss start</code> (see its header) and reached at <code>DSS_URL</code> (default <code>http://127.0.0.1:8090</code>). When DSS does not answer, these tests are skipped, and the test runner says why. In continuous integration (<code>CI=true</code>), they are skipped unless <code>DSS_URL</code> is set, and then they fail if DSS does not answer: the workflow <code>.github/workflows/dss.yml</code> starts DSS, sets <code>DSS_URL</code> and fails if any test is skipped. It runs on each push and pull request, and before each publication on npm.</p>
 <p>The certificates of <code>test/fixtures/certs/</code> and <code>test/fixtures/demo-certs/</code> are those of the PHP library; those of <code>test/fixtures/trust/</code>, one per case of the trust in a certificate, are generated by <code>bin/gen-test-certs</code>, in Docker. <strong>Their private keys are public</strong>: use them for the tests only (see the README of each directory).</p>
+<h3 id="what-is-checked-and-by-whom" class="tsd-anchor-link">What is checked, and by whom<a href="#what-is-checked-and-by-whom" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Each library checks, for its tokens and for its seals:</p>
+<ol>
+<li>that it verifies what it creates;</li>
+<li>that the other library verifies what it creates;</li>
+<li>that third-party tools verify what it creates: xml-crypto and xml-encryption for the tokens, DSS (Digital Signature Service, the validator of the European Commission) for the seals;</li>
+<li>that it verifies what these tools create.</li>
+</ol>
+<p>Each check belongs in the tests of the library itself, and runs in its continuous integration. Where each one is made:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Tokens of the PHP library</th>
+<th>Tokens of the Node.js library</th>
+<th>Seals of the PHP library</th>
+<th>Seals of the Node.js library</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. It verifies what it creates</td>
+<td>tests of the PHP library</td>
+<td>tests and continuous integration of the Node.js library</td>
+<td>tests of the PHP library</td>
+<td>tests and continuous integration of the Node.js library</td>
+</tr>
+<tr>
+<td>2. The other library verifies what it creates</td>
+<td>tests of the Node.js library, against the PHP library 2.0.0</td>
+<td>tests and continuous integration of the Node.js library, by the PHP library 2.0.0</td>
+<td>by hand</td>
+<td>tests of the PHP library, on seals made by the Node.js library 2.0.0</td>
+</tr>
+<tr>
+<td>3. Third-party tools verify what it creates</td>
+<td>by hand</td>
+<td>tests and continuous integration of the Node.js library</td>
+<td>by hand</td>
+<td>tests and continuous integration of the Node.js library</td>
+</tr>
+<tr>
+<td>4. It verifies what these tools create</td>
+<td>by hand</td>
+<td>tests and continuous integration of the Node.js library</td>
+<td>tests of the PHP library, on a seal made by DSS</td>
+<td>tests and continuous integration of the Node.js library, on a seal made by DSS</td>
+</tr>
+</tbody>
+</table>
+<p>The tests of the PHP library run with <code>bin/test</code>; the repository of the PHP library has no continuous integration. The Node.js library depends on xml-crypto, which canonicalizes its XML: for its tokens, xml-crypto is not a checker wholly apart from the code under test.</p>
 <h3 id="releasing-a-version" class="tsd-anchor-link">Releasing a version<a href="#releasing-a-version" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <p>A version is published on npm by the workflow <code>.github/workflows/publish.yml</code>, when a release is published on GitHub; pushing to <code>main</code>, or pushing a tag, publishes nothing. npm trusts this workflow (trusted publishing): it publishes without any npm token, and npm adds the provenance of the package, which names the workflow and the commit the package was built from.</p>
 <ol>
@@ -387,6 +500,7 @@
 <li><a href="#trust-anchor"><span>Trust anchor</span></a></li>
 <li><a href="#encryption"><span>Encryption</span></a></li>
 <li><a href="#interoperability"><span>Interoperability</span></a></li>
+<li><a href="#compatible-versions"><span>Compatible versions</span></a></li>
 <li><a href="#certificates-and-keys"><span>Certificates and keys</span></a></li>
 <li><a href="#options"><span>Options</span></a></li></ul></li>
 <li><a href="#demos"><span>Demos</span></a></li>
@@ -395,6 +509,7 @@
 <li><a href="#development"><span>Development</span></a></li>
 <li>
 <ul>
+<li><a href="#what-is-checked-and-by-whom"><span>What is checked, and by whom</span></a></li>
 <li><a href="#releasing-a-version"><span>Releasing a version</span></a></li></ul></li>
 <li><a href="#security"><span>Security</span></a></li>
 <li><a href="#license"><span>License</span></a></li></ul></div></details></div>
