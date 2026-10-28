@@ -8,14 +8,14 @@
 <div class="col-content">
 <div class="tsd-page-title">
 <h1>ezxmldsig for Node.js - v2.0.0</h1></div>
-<div class="tsd-panel tsd-typography"><h1 id="ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens" class="tsd-anchor-link">ezxmldsig for Node.js: signed and encrypted XML tokens<a href="#ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<div class="tsd-panel tsd-typography"><h1 id="ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens-and-sealed-files" class="tsd-anchor-link">ezxmldsig for Node.js: signed and encrypted XML tokens, and sealed files<a href="#ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens-and-sealed-files" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
 <blockquote>
 <p><strong>Documentation: <a href="https://webcoder31.github.io/ezxmldsig-doc/">webcoder31.github.io/ezxmldsig-doc</a></strong></p>
-<p>Why ezxmldsig exists, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability: the concepts common to the Node.js and PHP libraries are explained there. This README covers what is particular to the Node.js library.</p>
+<p>Why ezxmldsig exists, how a token works, a single sign-on, the duties of the receiver, encryption, certificates and keys, interoperability: the concepts of the tokens common to the Node.js and PHP libraries are explained there. The structure of the seals and the rules they follow are in their <a href="https://github.com/webcoder31/ezxmldsig-js/blob/main/design/seal.md">design document</a>. This README covers what is particular to the Node.js library.</p>
 </blockquote>
-<p>The library <strong>ezxmldsig</strong> creates and verifies XML tokens: enveloping XML digital signatures that carry timestamped user data, optionally encrypted. Use them for token based authentication, single sign-on, or to transmit data whose integrity and origin, and confidentiality when they are encrypted, are protected by the token itself.</p>
-<p>It is the Node.js counterpart of the PHP library <a href="https://github.com/webcoder31/ezxmldsig-php">ezxmldsig</a>, version 2.0.0: both create and verify <strong>the same tokens</strong>, so that a single sign-on can mix PHP and Node.js nodes. A token created by one is valid for the other, which reads the same data, and both refuse the same forged tokens with the same errors. The class, its methods, its options and its error messages are those of the PHP library, adapted to JavaScript; the differences are listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</p>
-<p>The library signs its own tokens only. It does not sign existing XML documents in place, parts of them, or external files: for these, use <a href="https://www.npmjs.com/package/xml-crypto">xml-crypto</a> directly, or a format designed for document signatures.</p>
+<p>The library <strong>ezxmldsig</strong> creates and verifies XML tokens: enveloping XML digital signatures that carry timestamped user data, optionally encrypted. Use them for token based authentication, single sign-on, or to transmit data whose integrity and origin, and confidentiality when they are encrypted, are protected by the token itself. It also seals files, as an <strong>experimental</strong> feature: an ASiC-E container that holds the files and one XAdES signature over them proves who sealed them and that they have not changed since (see <a href="#seals-experimental">Seals</a>).</p>
+<p>It is the Node.js counterpart of the PHP library <a href="https://github.com/webcoder31/ezxmldsig-php">ezxmldsig</a>, version 2.1.0: both create and verify <strong>the same tokens</strong> and <strong>the same seals</strong>, so that a single sign-on can mix PHP and Node.js nodes. A token created by one is valid for the other, which reads the same data, and both refuse the same forged tokens with the same errors; each library verifies the seals of the other (see <a href="#interoperability">Interoperability</a> and <a href="#compatible-versions">Compatible versions</a>). The classes, their methods, the options and the error messages are those of the PHP library, adapted to JavaScript; the differences are listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</p>
+<p>A token signs its own content only: the library does not sign existing XML documents in place, nor parts of them; for these, use <a href="https://www.npmjs.com/package/xml-crypto">xml-crypto</a> directly. Files of any kind are signed by the seals, in a container that holds them: to sign a PDF inside the PDF itself, use a PAdES library.</p>
 <p>The author of the <strong>ezxmldsig</strong> library is Thierry Thiers.</p>
 <h2 id="contents" class="tsd-anchor-link">Contents<a href="#contents" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
@@ -23,6 +23,7 @@
 <li><a href="#installation">Installation</a></li>
 <li><a href="#whats-in-the-box">What's in the box?</a></li>
 <li><a href="#why">Why?</a></li>
+<li><a href="#how-does-it-work">How does it work?</a></li>
 <li><a href="#how-to-use">How to use?</a>
 <ul>
 <li><a href="#creating-a-signed-xml-token">Creating a signed XML token</a></li>
@@ -33,23 +34,26 @@
 <li><a href="#xml-parsing">XML parsing</a></li>
 <li><a href="#trust-anchor">Trust anchor</a></li>
 <li><a href="#encryption">Encryption</a></li>
-<li><a href="#interoperability">Interoperability</a></li>
-<li><a href="#compatible-versions">Compatible versions</a></li>
 <li><a href="#certificates-and-keys">Certificates and keys</a></li>
 <li><a href="#options">Options</a></li>
+<li><a href="#seals-experimental">Seals (experimental)</a></li>
+<li><a href="#interoperability">Interoperability</a></li>
+<li><a href="#compatible-versions">Compatible versions</a></li>
+<li><a href="#upgrading-from-1x">Upgrading from 1.x</a></li>
 </ul>
 </li>
 <li><a href="#demos">Demos</a></li>
 <li><a href="#differences-with-the-php-library">Differences with the PHP library</a></li>
-<li><a href="#documentation">Documentation</a></li>
-<li><a href="#development">Development</a>
+<li><a href="#tests">Tests</a>
 <ul>
 <li><a href="#what-is-checked-and-by-whom">What is checked, and by whom</a></li>
-<li><a href="#releasing-a-version">Releasing a version</a></li>
 </ul>
 </li>
+<li><a href="#documentation">Documentation</a></li>
+<li><a href="#releasing-a-version">Releasing a version</a></li>
 <li><a href="#security">Security</a></li>
 <li><a href="#license">License</a></li>
+<li><a href="#how-to-contribute">How to Contribute?</a></li>
 </ul>
 <h2 id="requirements" class="tsd-anchor-link">Requirements<a href="#requirements" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>Node.js 22.12 or later. The library is an ES module; CommonJS code can load it with <code>require()</code>, which Node.js supports for ES modules from version 22.12.</p>
@@ -76,12 +80,17 @@
 <li>It gives access to the information of the certificate of the token: subject, issuer, validity dates. <code>getPrettyXML()</code> gives the token in a readable form, for display, as the PHP library gives it.</li>
 <li>It refuses, before parsing them, the XML documents that have a document type declaration (see <a href="#xml-parsing">XML parsing</a>).</li>
 </ol>
-<p><strong><code>X509Cert</code></strong> reads an X.509 certificate (subject, issuer, Distinguished Name, validity dates, fingerprint) and makes the checks the analysis needs: its key usage (<code>canSign()</code>), its chain up to trusted CA certificates (<code>isTrustedBy()</code>), whether a given CA certificate issued it (<code>isValidCA()</code>).</p>
+<p><strong><code>X509Cert</code></strong> reads an X.509 certificate (subject, issuer, Distinguished Name, validity dates, fingerprint) and makes the checks the analysis needs: its key usage (<code>canSign()</code>), its chain up to trusted CA certificates (<code>isTrustedBy()</code>), whether a given CA certificate issued it (<code>isValidCA()</code>). For the seals, <code>getTrustedChain()</code> builds and verifies the chain at a given date, the time of a time-stamp, with the rules <code>isTrustedBy()</code> applies at the current date.</p>
+<p><strong><code>createSeal()</code></strong> and <strong><code>verifySeal()</code></strong> seal files and verify seals: an ASiC-E container (ETSI EN 319 162-1) that holds the files and one detached XAdES baseline signature over them (ETSI EN 319 132-1), at level B, T (a signature time-stamp, RFC 3161) or LT (the certificates, CRLs and OCSP responses that validate it, embedded). The PHP library makes and verifies the same seals, and DSS, the validator of the European Commission, validates them.</p>
 <p>The token protects its own content only: not the request that carries it (URL, headers, other fields), nor the response, nor the identity of the server it is sent to. Use an HTTPS connection for these.</p>
 <h2 id="why" class="tsd-anchor-link">Why?<a href="#why" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>A signature proves that the data of a token were not changed; what matters most is to prove <strong>who issued it</strong>. A receiver accepts a token only if its signing certificate descends, through a chain of trust, from the CA certificates it declares and, when it asks for it, has the subject it expects or is the very certificate it pinned (see <a href="#trust-anchor">Trust anchor</a>).</p>
-<p><strong>Revocation is not checked</strong>: the library consults neither certificate revocation lists (CRL) nor OCSP responders, so a revoked certificate is accepted until it expires. What to do when a key leaks, signing key, CA key or decryption key: see <a href="https://webcoder31.github.io/ezxmldsig-doc/certificates/#when-a-key-is-compromised">When a key is compromised</a> on the documentation site.</p>
-<p>How a token works, the chain of trust, a root of a company's own for an internal single sign-on, and why this library exists: see <a href="https://webcoder31.github.io/ezxmldsig-doc/how-it-works/">How does it work?</a> and <a href="https://webcoder31.github.io/ezxmldsig-doc/why/">Why?</a> on the documentation site.</p>
+<p><strong>The tokens do not check revocation</strong>: for them, the library consults neither certificate revocation lists (CRL) nor OCSP responders, so a revoked certificate is accepted until it expires. The seals check it (see <a href="#seals-experimental">Seals</a>). What to do when a key leaks, signing key, CA key or decryption key: see <a href="https://webcoder31.github.io/ezxmldsig-doc/certificates/#when-a-key-is-compromised">When a key is compromised</a> on the documentation site.</p>
+<p>The chain of trust, a root of a company's own for an internal single sign-on, and why this library exists: see <a href="https://webcoder31.github.io/ezxmldsig-doc/why/">Why?</a> on the documentation site.</p>
+<h2 id="how-does-it-work" class="tsd-anchor-link">How does it work?<a href="#how-does-it-work" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>A token is an enveloping XML digital signature: the node <code>Token</code> holds the user data, a timestamp and a random identifier; its digest is written in <code>ds:SignedInfo</code>, which the sender signs with its private key; its certificate travels in <code>ds:KeyInfo</code>. The receiver answers three questions: were the data changed (the digest), is the seal intact (the signature), and who sealed it (the trust in the certificate). The last one decides: an attacker who alters the data and signs them again with a key of their own passes the first two.</p>
+<p><code>isSignatureValid()</code> also checks the algorithms and the audience; <strong>the freshness, the expiry and the replay are up to the receiver</strong> (see <a href="#checking-an-xml-token">Checking an XML token</a>).</p>
+<p>A token block by block, each check and the attack it stops: see <a href="https://webcoder31.github.io/ezxmldsig-doc/how-it-works/">How does it work?</a> on the documentation site. The <a href="#demos">demos</a> play these checks out on real tokens, and replay the attacks the library rejects.</p>
 <h2 id="how-to-use" class="tsd-anchor-link">How to use?<a href="#how-to-use" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>Keys and certificates are in PEM format, given by the path of their file or by their content (a string holding <code>-----BEGIN </code>, or bytes). The certificates of the examples are those of <code>test/fixtures/demo-certs/</code>, <strong>whose private keys are public</strong>: generate your own (see <a href="#certificates-and-keys">Certificates and keys</a>).</p>
 <h3 id="creating-a-signed-xml-token" class="tsd-anchor-link">Creating a signed XML token<a href="#creating-a-signed-xml-token" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
@@ -202,67 +211,8 @@
 <li><strong>CBC is accepted only when declared.</strong> AES-CBC and Triple DES CBC have no integrity. An analysis decrypts a CBC token only if its option <code>sessionKeyCipheringAlgorithm</code> names this very algorithm, even when <code>checkCryptingAlgorithms</code> is <code>false</code>. Declare it only to read tokens of peers that cannot use AES-GCM yet.</li>
 </ul>
 <p>What encryption protects and what it does not, and the attacks these choices stop (padding oracles, Bleichenbacher's attack on RSA 1.5, Jager and Somorovsky's attack on CBC): see <a href="https://webcoder31.github.io/ezxmldsig-doc/encryption/">Encryption</a> on the documentation site.</p>
-<h3 id="interoperability" class="tsd-anchor-link">Interoperability<a href="#interoperability" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<p><strong>With the PHP library.</strong> A token created by the PHP library ezxmldsig 1.2.1 or later is valid here, and a token created here is valid for it, signed or encrypted, with every algorithm and option both libraries share; both read the same data, timestamp, identifier, audiences and expiry. The tests of this library check it, under PHP 7.4 and 8.3, and replay the attack lab of the PHP library demo: every forged token gets the same verdict from both libraries. See <a href="#differences-with-the-php-library">Differences with the PHP library</a> for the few cases where they differ.</p>
-<p><strong>The format of a token, and other libraries.</strong> The format of a token, element by element, and the code that creates and reads one with xml-crypto and xml-encryption, which the tests of this library run: see <a href="https://webcoder31.github.io/ezxmldsig-doc/interoperability/">Interoperability</a> on the documentation site. These libraries only verify a signature, with the key they are given, and only decrypt: a receiver that uses them directly must make all the other checks of <code>isSignatureValid()</code> itself.</p>
-<h3 id="compatible-versions" class="tsd-anchor-link">Compatible versions<a href="#compatible-versions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<p>The versions of the two libraries that work together. A pair has the same features when each library creates and verifies what the other creates and verifies: the same tokens, and the same seals when both have them. In every pair, the cases listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a> differ.</p>
-<table>
-<thead>
-<tr>
-<th>PHP library</th>
-<th>Node.js library</th>
-<th>Tokens</th>
-<th>Seals</th>
-<th>Same features</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>2.1.0</strong></td>
-<td><strong>2.0.0</strong></td>
-<td>exchanged both ways (1)</td>
-<td>exchanged both ways, experimental (2)</td>
-<td><strong>yes</strong></td>
-</tr>
-<tr>
-<td>2.0.0</td>
-<td>2.0.0</td>
-<td>exchanged both ways</td>
-<td>only in the Node.js library</td>
-<td>no</td>
-</tr>
-<tr>
-<td>1.2.1</td>
-<td>1.0.3</td>
-<td>exchanged both ways</td>
-<td>in neither library</td>
-<td>yes</td>
-</tr>
-<tr>
-<td>1.2.1</td>
-<td>1.0.2</td>
-<td>exchanged both ways</td>
-<td>in neither library</td>
-<td>no: <code>getPrettyXML()</code> comes to the Node.js library in 1.0.3</td>
-</tr>
-<tr>
-<td>1.2.0</td>
-<td>1.0.0, 1.0.1</td>
-<td>exchanged both ways, but for three defects of the PHP library 1.2.0, fixed in 1.2.1 (3)</td>
-<td>in neither library</td>
-<td>no: <code>getPrettyXML()</code> comes to the Node.js library in 1.0.3</td>
-</tr>
-</tbody>
-</table>
-<ol>
-<li>The tests of the Node.js library 2.0.0 exchange tokens with the PHP library 2.0.0; the PHP library 2.1.0 does not change the tokens.</li>
-<li>The tests of the PHP library 2.1.0 verify seals made by the Node.js library 2.0.0. The seals of the PHP library 2.1.0 were verified by the Node.js library 2.0.0 and validated by DSS by hand (see <a href="#what-is-checked-and-by-whom">What is checked, and by whom</a>).</li>
-<li>Listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</li>
-</ol>
-<p>Each pair of the table is the one the tests of these versions check. The tokens do not change from the PHP library 1.2.1 and the Node.js library 1.0.2 on: later versions exchange them too, although the tests do not check every pair. A receiver of the PHP library 1.0 or 1.1 refuses the encrypted tokens of the PHP library 1.2.0 and later, and those of every version of the Node.js library.</p>
 <h3 id="certificates-and-keys" class="tsd-anchor-link">Certificates and keys<a href="#certificates-and-keys" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<p>A token involves up to three kinds of certificates, all X.509 certificates in PEM format with <strong>RSA keys</strong>: the signing certificate of the sender, the CA certificates the recipient trusts (<code>caCertPath</code>), and, for encrypted tokens, the encryption certificate of the recipient. EC and DSA keys are refused.</p>
+<p>A token involves up to three kinds of certificates, all X.509 certificates in PEM format with <strong>RSA keys</strong>: the signing certificate of the sender, the CA certificates the recipient trusts (<code>caCertPath</code>), and, for encrypted tokens, the encryption certificate of the recipient. EC and DSA keys are refused. These rules are those of the tokens: the seals take RSA keys of 2048 bits or more, and EC keys on P-256, P-384 and P-521 (see <a href="#seals-experimental">Seals</a>).</p>
 <p>The signing certificate must be valid at the current date and, if it has a key usage extension, allow <code>digitalSignature</code> or <code>nonRepudiation</code>. With <code>caCertPath</code>, every certificate of the chain is also checked: validity dates, signature, and, for each issuer, basic constraints with <code>CA:TRUE</code> and a key usage that allows <code>keyCertSign</code> (see <a href="#trust-anchor">Trust anchor</a>).</p>
 <p><code>expectedSubject</code> takes the fields of the subject as an object, <code>{ O: 'Lothbrok Ltd', OU: 'Signature Dept' }</code>, or the full Distinguished Name as a string (see <a href="#trust-anchor">Trust anchor</a>).</p>
 <p>Who holds which key, what is checked, the fields of a subject, and the OpenSSL commands that create a root CA, an intermediate CA, a signing and an encryption certificate: see <a href="https://webcoder31.github.io/ezxmldsig-doc/certificates/">Certificates and keys</a> on the documentation site.</p>
@@ -370,8 +320,88 @@
 <pre><code class="js"><span class="hl-7">// Create a token signed with RSA-SHA512 and an SHA-512 digest...</span><br/><span class="hl-5">const</span><span class="hl-1"> </span><span class="hl-6">token</span><span class="hl-1"> = </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-0">createXMLToken</span><span class="hl-1">(</span><span class="hl-4">data</span><span class="hl-1">, </span><span class="hl-4">signKey</span><span class="hl-1">, </span><span class="hl-4">signCert</span><span class="hl-1">, </span><span class="hl-4">signKeyPassword</span><span class="hl-1">, {</span><br/><span class="hl-1">  </span><span class="hl-4">signatureAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">RSA_SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">  </span><span class="hl-4">digestAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">});</span><br/><br/><span class="hl-7">// ...and analyze it, expecting these algorithms.</span><br/><span class="hl-5">const</span><span class="hl-1"> </span><span class="hl-6">analyzed</span><span class="hl-1"> = </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-0">analyzeXMLToken</span><span class="hl-1">(</span><span class="hl-4">xml</span><span class="hl-1">, {</span><br/><span class="hl-1">  </span><span class="hl-4">caCertPath:</span><span class="hl-1"> [</span><span class="hl-2">&#39;path/to/ca/intermediate/certificate.pem&#39;</span><span class="hl-1">, </span><span class="hl-2">&#39;path/to/ca/root/certificate.pem&#39;</span><span class="hl-1">],</span><br/><span class="hl-1">  </span><span class="hl-4">signatureAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">RSA_SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">  </span><span class="hl-4">digestAlgorithm:</span><span class="hl-1"> </span><span class="hl-4">XMLDSigToken</span><span class="hl-1">.</span><span class="hl-6">SHA512</span><span class="hl-1">,</span><br/><span class="hl-1">});</span>
 </code><button type="button">Copy</button></pre>
 
+<h3 id="seals-experimental" class="tsd-anchor-link">Seals (experimental)<a href="#seals-experimental" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>A seal proves who sealed files, and that they have not changed since: contracts, PDF, text or Markdown files, any file. <code>createSeal()</code> writes an ASiC-E container (<code>.asice</code>, a ZIP archive) that holds the files, a manifest, and a XAdES signature of level B over them; <code>verifySeal()</code> verifies one. The seals are those of the PHP library <a href="https://github.com/webcoder31/ezxmldsig-php#seals-experimental">ezxmldsig</a>, version 2.1.0, and their <a href="https://github.com/webcoder31/ezxmldsig-js/blob/main/design/seal.md">design document</a> gives the structure and the rules followed. Each library verifies the seals of the other, and DSS validates the seals of both, at levels B, T and LT.</p>
+<p>The seals are an <strong>experimental</strong> feature of the 2.x versions: their API may change in a minor version.</p>
+<pre><code class="js"><span class="hl-3">import</span><span class="hl-1"> { </span><span class="hl-4">readFileSync</span><span class="hl-1">, </span><span class="hl-4">writeFileSync</span><span class="hl-1"> } </span><span class="hl-3">from</span><span class="hl-1"> </span><span class="hl-2">&#39;node:fs&#39;</span><span class="hl-1">;</span><br/><span class="hl-3">import</span><span class="hl-1"> { </span><span class="hl-4">createSeal</span><span class="hl-1">, </span><span class="hl-4">verifySeal</span><span class="hl-1"> } </span><span class="hl-3">from</span><span class="hl-1"> </span><span class="hl-2">&#39;@webcoder31/ezxmldsig/seal&#39;</span><span class="hl-1">;</span><br/><br/><span class="hl-5">const</span><span class="hl-1"> </span><span class="hl-6">container</span><span class="hl-1"> = </span><span class="hl-0">createSeal</span><span class="hl-1">(</span><br/><span class="hl-1">  [</span><br/><span class="hl-1">    { </span><span class="hl-4">name:</span><span class="hl-1"> </span><span class="hl-2">&#39;contract.pdf&#39;</span><span class="hl-1">, </span><span class="hl-4">content:</span><span class="hl-1"> </span><span class="hl-0">readFileSync</span><span class="hl-1">(</span><span class="hl-2">&#39;contract.pdf&#39;</span><span class="hl-1">) },</span><br/><span class="hl-1">    { </span><span class="hl-4">name:</span><span class="hl-1"> </span><span class="hl-2">&#39;annexes/prices.csv&#39;</span><span class="hl-1">, </span><span class="hl-4">content:</span><span class="hl-1"> </span><span class="hl-0">readFileSync</span><span class="hl-1">(</span><span class="hl-2">&#39;prices.csv&#39;</span><span class="hl-1">) },</span><br/><span class="hl-1">  ],</span><br/><span class="hl-1">  </span><span class="hl-2">&#39;path/to/signing/key.pem&#39;</span><span class="hl-1">,</span><br/><span class="hl-1">  </span><span class="hl-2">&#39;path/to/signing/certificate.pem&#39;</span><span class="hl-1">,</span><br/><span class="hl-1">  </span><span class="hl-2">&#39;key password&#39;</span><span class="hl-1">,</span><br/><span class="hl-1">  { </span><span class="hl-4">chain:</span><span class="hl-1"> [</span><span class="hl-2">&#39;path/to/intermediate/ca/certificate.pem&#39;</span><span class="hl-1">] },</span><br/><span class="hl-1">);</span><br/><span class="hl-0">writeFileSync</span><span class="hl-1">(</span><span class="hl-2">&#39;contract.asice&#39;</span><span class="hl-1">, </span><span class="hl-4">container</span><span class="hl-1">);</span><br/><br/><span class="hl-5">const</span><span class="hl-1"> </span><span class="hl-6">verification</span><span class="hl-1"> = </span><span class="hl-0">verifySeal</span><span class="hl-1">(</span><span class="hl-0">readFileSync</span><span class="hl-1">(</span><span class="hl-2">&#39;contract.asice&#39;</span><span class="hl-1">), {</span><br/><span class="hl-1">  </span><span class="hl-4">caCertPath:</span><span class="hl-1"> </span><span class="hl-2">&#39;path/to/root/ca/certificate.pem&#39;</span><span class="hl-1">,</span><br/><span class="hl-1">  </span><span class="hl-4">crls:</span><span class="hl-1"> [</span><span class="hl-4">crlOfTheIntermediateCa</span><span class="hl-1">, </span><span class="hl-4">crlOfTheRootCa</span><span class="hl-1">],</span><br/><span class="hl-1">});</span><br/><span class="hl-3">if</span><span class="hl-1"> (!</span><span class="hl-4">verification</span><span class="hl-1">.</span><span class="hl-0">isValid</span><span class="hl-1">()) {</span><br/><span class="hl-1">  </span><span class="hl-3">throw</span><span class="hl-1"> </span><span class="hl-5">new</span><span class="hl-1"> </span><span class="hl-0">Error</span><span class="hl-1">(</span><span class="hl-4">verification</span><span class="hl-1">.</span><span class="hl-0">getError</span><span class="hl-1">());</span><br/><span class="hl-1">}</span><br/><span class="hl-7">// verification.getFiles(), getSigningCertificate(), getLevel(), getSigningTime()...</span>
+</code><button type="button">Copy</button></pre>
+
+<ul>
+<li><strong>Algorithms.</strong> An RSA key signs with RSA-PSS by default (SHA-256, the salt as long as the digest), an EC key with ECDSA on P-256, P-384 or P-521; RSA PKCS#1 v1.5 remains available (<code>signatureAlgorithm</code>), and accepted at verification. RSA keys of less than 2048 bits are refused, and so are SHA-1 and MD5.</li>
+<li><strong>Everything is covered.</strong> A seal is valid only if every file of the container outside <code>META-INF/</code> is covered by its signature, so that a file added to a sealed container cannot pass for a sealed one. The container is read strictly: a ZIP archive that two readers could see differently, an element of the signature this library does not process (a signature policy, a transform), make the seal invalid.</li>
+<li><strong>Trust.</strong> <code>caCertPath</code> names the trusted CA certificates, as for the tokens. The signing certificate is trusted at the time of the signature time-stamp, if any, and at the current date otherwise: the time the signer claims (<code>getSigningTime()</code>) proves nothing.</li>
+<li><strong>Revocation.</strong> It is checked by default, with CRLs (<code>crls</code>, in DER or PEM) or OCSP responses (<code>ocspResponses</code>) for each certificate of the chain, its trust anchor excepted. The library sends no request: <code>validationDataRequests()</code> lists the CRLs to fetch and the OCSP requests to send. <code>revocation: false</code> verifies a seal without, which <code>isRevocationChecked()</code> then tells.</li>
+<li><strong>Level T.</strong> <code>timestampRequest()</code> gives the RFC 3161 request to send to a time-stamping authority of your choice (<code>application/timestamp-query</code>), and <code>addSignatureTimestamp()</code> checks its response and embeds the token; the verification then needs <code>tsaCertPath</code>, the trusted certificates of the authority.</li>
+<li><strong>Level LT.</strong> <code>addValidationData()</code> embeds the certificates, CRLs and OCSP responses that validate a seal of level T, issued after its time-stamp: the seal can then be validated without reaching the CAs, as long as the certificate of the time-stamping authority is valid (it is checked at the current date: only a time-stamp over the time-stamp, level LTA, which this library does not make, would check it at an earlier one).</li>
+</ul>
+<p>The names of the files are compared in Unicode normalization form C: a name that is not in this form is refused at creation.</p>
+<h3 id="interoperability" class="tsd-anchor-link">Interoperability<a href="#interoperability" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p><strong>With the PHP library.</strong> A token created by the PHP library ezxmldsig 1.2.1 or later is valid here, and a token created here is valid for it, signed or encrypted, with every algorithm and option both libraries share; both read the same data, timestamp, identifier, audiences and expiry. The tests of this library check it, under PHP 7.4 and 8.3, and replay the attack lab of the PHP library demo: every forged token gets the same verdict from both libraries. See <a href="#differences-with-the-php-library">Differences with the PHP library</a> for the few cases where they differ.</p>
+<p><strong>Seals.</strong> The seals of both libraries are the same: each library verifies the seals of the other, at levels B, T and LT, and DSS validates them (see <a href="#what-is-checked-and-by-whom">What is checked, and by whom</a>).</p>
+<p><strong>The format of a token, and other libraries.</strong> The format of a token, element by element, and the code that creates and reads one with xml-crypto and xml-encryption, which the tests of this library run: see <a href="https://webcoder31.github.io/ezxmldsig-doc/interoperability/">Interoperability</a> on the documentation site. These libraries only verify a signature, with the key they are given, and only decrypt: a receiver that uses them directly must make all the other checks of <code>isSignatureValid()</code> itself.</p>
+<h3 id="compatible-versions" class="tsd-anchor-link">Compatible versions<a href="#compatible-versions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>The versions of the two libraries that work together. A pair has the same features when each library creates and verifies what the other creates and verifies: the same tokens, and the same seals when both have them. In every pair, the cases listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a> differ.</p>
+<table>
+<thead>
+<tr>
+<th>PHP library</th>
+<th>Node.js library</th>
+<th>Tokens</th>
+<th>Seals</th>
+<th>Same features</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>2.1.0</strong></td>
+<td><strong>2.0.0</strong></td>
+<td>exchanged both ways (1)</td>
+<td>exchanged both ways, experimental (2)</td>
+<td><strong>yes</strong></td>
+</tr>
+<tr>
+<td>2.0.0</td>
+<td>2.0.0</td>
+<td>exchanged both ways</td>
+<td>only in the Node.js library</td>
+<td>no</td>
+</tr>
+<tr>
+<td>1.2.1</td>
+<td>1.0.3</td>
+<td>exchanged both ways</td>
+<td>in neither library</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1.2.1</td>
+<td>1.0.2</td>
+<td>exchanged both ways</td>
+<td>in neither library</td>
+<td>no: <code>getPrettyXML()</code> comes to the Node.js library in 1.0.3</td>
+</tr>
+<tr>
+<td>1.2.0</td>
+<td>1.0.0, 1.0.1</td>
+<td>exchanged both ways, but for three defects of the PHP library 1.2.0, fixed in 1.2.1 (3)</td>
+<td>in neither library</td>
+<td>no: <code>getPrettyXML()</code> comes to the Node.js library in 1.0.3</td>
+</tr>
+</tbody>
+</table>
+<ol>
+<li>The tests of the Node.js library 2.0.0 exchange tokens with the PHP library 2.0.0; the PHP library 2.1.0 does not change the tokens.</li>
+<li>The tests of the PHP library 2.1.0 verify seals made by the Node.js library 2.0.0. The seals of the PHP library 2.1.0 were verified by the Node.js library 2.0.0 and validated by DSS by hand (see <a href="#what-is-checked-and-by-whom">What is checked, and by whom</a>).</li>
+<li>Listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</li>
+</ol>
+<p>Each pair of the table is the one the tests of these versions check. The tokens do not change from the PHP library 1.2.1 and the Node.js library 1.0.2 on: later versions exchange them too, although the tests do not check every pair. A receiver of the PHP library 1.0 or 1.1 refuses the encrypted tokens of the PHP library 1.2.0 and later, and those of every version of the Node.js library.</p>
+<h3 id="upgrading-from-1x" class="tsd-anchor-link">Upgrading from 1.x<a href="#upgrading-from-1x" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li><strong>Imports.</strong> The package has no root any more: each name comes from its branch. <code>import { XMLDSigToken } from '@webcoder31/ezxmldsig'</code> becomes <code>import { XMLDSigToken } from '@webcoder31/ezxmldsig/token'</code>, and <code>X509Cert</code> comes from <code>@webcoder31/ezxmldsig/core</code>. The types <code>TokenData</code>, <code>TokenValue</code>, <code>ReadTokenData</code> and <code>TokenOptions</code> come from <code>@webcoder31/ezxmldsig/token</code>, <code>NameFields</code> and <code>PemSource</code> from <code>@webcoder31/ezxmldsig/core</code>. The identifiers of canonicalization, digest and signature (<code>C14N</code>, <code>SHA256</code>, <code>RSA_SHA256</code>…, <code>XMLDSIG_NS</code>) come from <code>@webcoder31/ezxmldsig/core</code>, those of encryption (<code>AES256_GCM</code>, <code>RSA_OAEP_MGF1P</code>…, <code>XMLENC_NS</code>) from <code>@webcoder31/ezxmldsig/token</code>.</li>
+<li>Nothing else changes: the same options, verdicts and error messages, and the same tokens. The constants of <code>XMLDSigToken</code> (<code>XMLDSigToken.RSA_SHA512</code>) remain.</li>
+</ul>
 <h2 id="demos" class="tsd-anchor-link">Demos<a href="#demos" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
-<p>Two demos show the tokens at work, online, with nothing to install. They run the PHP library, whose tokens this library creates and verifies the same way (see <a href="#interoperability">Interoperability</a>); its README tells how to run them on your machine (<a href="https://github.com/webcoder31/ezxmldsig-php#demo">demo</a>, <a href="https://github.com/webcoder31/ezxmldsig-php#single-sign-on-demo">single sign-on demo</a>).</p>
+<p>Two demos show the tokens at work, online, with nothing to install. They run the PHP library, whose tokens this library creates and verifies the same way (see <a href="#interoperability">Interoperability</a>); its README tells how to run them on your machine (<a href="https://github.com/webcoder31/ezxmldsig-php#signed-token-demo">signed token demo</a>, <a href="https://github.com/webcoder31/ezxmldsig-php#single-sign-on-demo">single sign-on demo</a>).</p>
 <p>**The token lab, <a href="https://ezxmldsig.wbcdr.dev/**:">https://ezxmldsig.wbcdr.dev/**:</a> create a token, read each block of its signature, follow the checks of the receiver one by one, and replay the attacks the library refuses.</p>
 <p><img src="https://webcoder31.github.io/ezxmldsig-doc/assets/screenshots/token-lab.png" alt="The token lab: its animated illustration of a token verified and accepted, the issuer, and the annotated token with the block SignedInfo selected"></p>
 <p>**The single sign-on demo, <a href="https://sso.wbcdr.dev/**:">https://sso.wbcdr.dev/**:</a> three sites on three host names, an identity provider, which alone knows the passwords, and two applications that open on the tokens it signs, one login for both. A trace shows each hop, each token and each check.</p>
@@ -392,10 +422,14 @@
 <li>With <code>base64Encode: false</code>, it reads <code>&amp;</code> in a value as the start of an entity reference: <code>a&amp;amp;b</code> is written <code>a&amp;b</code>, and <code>a &amp; b</code> is lost. This library writes every value as text.</li>
 <li>It stops on a PHP error on a certificate whose validity dates are in 2050 or later, which this library reads. Anyone can send a token signed with such a certificate to a receiver that runs PHP 1.2.0.</li>
 </ul>
-<h2 id="documentation" class="tsd-anchor-link">Documentation<a href="#documentation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
-<p>The documentation of the API is generated from the comments of the sources by <a href="https://typedoc.org/">TypeDoc</a> into <code>docs/</code>, published by GitHub Pages: <a href="https://webcoder31.github.io/ezxmldsig-js/">https://webcoder31.github.io/ezxmldsig-js/</a>. Run <code>npm run docs</code> after changing a comment of an exported element, and commit <code>docs/</code> with the code; the continuous integration checks that it is up to date. The pages load nothing from other servers.</p>
-<h2 id="development" class="tsd-anchor-link">Development<a href="#development" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
-<p>Requirements: Node.js 22.12 or later, and a running Docker daemon for the tests of the interoperability with the PHP library.</p>
+<p><strong>With the PHP library 2.1.0, for the seals</strong>, the seals are the same, and so are the verdicts on them and the error messages, but in these cases:</p>
+<ul>
+<li><strong>Bytes and times.</strong> The files, the containers, the CRLs and the OCSP responses are <code>Uint8Array</code> here, strings of bytes in PHP. A time is a <code>Date</code> here, where the PHP library takes a UNIX time (<code>signingTime</code>) and returns a <code>DateTimeImmutable</code>.</li>
+<li><strong>Limits</strong> of the reading of a container: the option <code>limits</code> (<code>{ maxEntries, maxTotalSize }</code>) here, the options <code>maxEntries</code> and <code>maxTotalSize</code> in PHP.</li>
+<li><strong>Unicode.</strong> The names of the files are always compared in normalization form C here; the PHP library compares them so with the intl extension only, and as bytes without it.</li>
+</ul>
+<h2 id="tests" class="tsd-anchor-link">Tests<a href="#tests" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Requirements: Node.js 22.12 or later, and a running Docker daemon for the tests of the interoperability with the PHP library, and for DSS.</p>
 <pre><code class="sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">ci</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">test</span>
 </code><button type="button">Copy</button></pre>
 
@@ -454,7 +488,9 @@
 </tbody>
 </table>
 <p>The tests of the PHP library run with <code>bin/test</code>; the repository of the PHP library has no continuous integration. The Node.js library depends on xml-crypto, which canonicalizes its XML: for its tokens, xml-crypto is not a checker wholly apart from the code under test.</p>
-<h3 id="releasing-a-version" class="tsd-anchor-link">Releasing a version<a href="#releasing-a-version" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<h2 id="documentation" class="tsd-anchor-link">Documentation<a href="#documentation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>The documentation of the API is generated from the comments of the sources by <a href="https://typedoc.org/">TypeDoc</a> into <code>docs/</code>, published by GitHub Pages: <a href="https://webcoder31.github.io/ezxmldsig-js/">https://webcoder31.github.io/ezxmldsig-js/</a>. Run <code>npm run docs</code> after changing a comment of an exported element, and commit <code>docs/</code> with the code; the continuous integration checks that it is up to date. The pages load nothing from other servers.</p>
+<h2 id="releasing-a-version" class="tsd-anchor-link">Releasing a version<a href="#releasing-a-version" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>A version is published on npm by the workflow <code>.github/workflows/publish.yml</code>, when a release is published on GitHub; pushing to <code>main</code>, or pushing a tag, publishes nothing. npm trusts this workflow (trusted publishing): it publishes without any npm token, and npm adds the provenance of the package, which names the workflow and the commit the package was built from.</p>
 <ol>
 <li>Set the version, in <code>package.json</code> and <code>package-lock.json</code>, without tag: <code>npm version 1.2.3 --no-git-tag-version</code>.</li>
@@ -465,7 +501,12 @@
 <h2 id="security" class="tsd-anchor-link">Security<a href="#security" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <p>To report a vulnerability, see <a href="media/SECURITY.md">SECURITY.md</a>: report it privately, not in a public issue.</p>
 <h2 id="license" class="tsd-anchor-link">License<a href="#license" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
-<p><a href="media/LICENSE">CeCILL-C</a>, the license of the PHP library.</p>
+<p><a href="media/LICENSE">CeCILL-C</a>, the license of both libraries.</p>
+<h2 id="how-to-contribute" class="tsd-anchor-link">How to Contribute?<a href="#how-to-contribute" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li><a href="https://github.com/webcoder31/ezxmldsig-js/issues">Open Issues</a></li>
+<li><a href="https://github.com/webcoder31/ezxmldsig-js/pulls">Open Pull Requests</a></li>
+</ul>
 </div></div>
 <div class="col-sidebar">
 <div class="page-menu">
@@ -481,13 +522,14 @@
 <div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
 <details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>
 <h3>On This Page</h3></summary>
-<div class="tsd-accordion-details"><a href="#ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens"><span>ezxmldsig for <wbr/>Node.js: signed and encrypted <wbr/>XML tokens</span></a>
+<div class="tsd-accordion-details"><a href="#ezxmldsig-for-nodejs-signed-and-encrypted-xml-tokens-and-sealed-files"><span>ezxmldsig for <wbr/>Node.js: signed and encrypted <wbr/>XML tokens, and sealed files</span></a>
 <ul>
 <li><a href="#contents"><span>Contents</span></a></li>
 <li><a href="#requirements"><span>Requirements</span></a></li>
 <li><a href="#installation"><span>Installation</span></a></li>
 <li><a href="#whats-in-the-box"><span>What&#39;s in the box?</span></a></li>
 <li><a href="#why"><span>Why?</span></a></li>
+<li><a href="#how-does-it-work"><span>How does it work?</span></a></li>
 <li><a href="#how-to-use"><span>How to use?</span></a></li>
 <li>
 <ul>
@@ -499,20 +541,23 @@
 <li><a href="#xml-parsing"><span>XML parsing</span></a></li>
 <li><a href="#trust-anchor"><span>Trust anchor</span></a></li>
 <li><a href="#encryption"><span>Encryption</span></a></li>
+<li><a href="#certificates-and-keys"><span>Certificates and keys</span></a></li>
+<li><a href="#options"><span>Options</span></a></li>
+<li><a href="#seals-experimental"><span>Seals (experimental)</span></a></li>
 <li><a href="#interoperability"><span>Interoperability</span></a></li>
 <li><a href="#compatible-versions"><span>Compatible versions</span></a></li>
-<li><a href="#certificates-and-keys"><span>Certificates and keys</span></a></li>
-<li><a href="#options"><span>Options</span></a></li></ul></li>
+<li><a href="#upgrading-from-1x"><span>Upgrading from 1.x</span></a></li></ul></li>
 <li><a href="#demos"><span>Demos</span></a></li>
 <li><a href="#differences-with-the-php-library"><span>Differences with the <wbr/>PHP library</span></a></li>
-<li><a href="#documentation"><span>Documentation</span></a></li>
-<li><a href="#development"><span>Development</span></a></li>
+<li><a href="#tests"><span>Tests</span></a></li>
 <li>
 <ul>
-<li><a href="#what-is-checked-and-by-whom"><span>What is checked, and by whom</span></a></li>
-<li><a href="#releasing-a-version"><span>Releasing a version</span></a></li></ul></li>
+<li><a href="#what-is-checked-and-by-whom"><span>What is checked, and by whom</span></a></li></ul></li>
+<li><a href="#documentation"><span>Documentation</span></a></li>
+<li><a href="#releasing-a-version"><span>Releasing a version</span></a></li>
 <li><a href="#security"><span>Security</span></a></li>
-<li><a href="#license"><span>License</span></a></li></ul></div></details></div>
+<li><a href="#license"><span>License</span></a></li>
+<li><a href="#how-to-contribute"><span>How to <wbr/>Contribute?</span></a></li></ul></div></details></div>
 <div class="site-menu">
 <nav id="tsd-sidebar-links" class="tsd-navigation"><a href="https://github.com/webcoder31/ezxmldsig-js" class="tsd-nav-link">GitHub</a><a href="https://www.npmjs.com/package/@webcoder31/ezxmldsig" class="tsd-nav-link">npm</a></nav>
 <nav class="tsd-navigation"><a href="modules.html">ezxmldsig for Node.js - v2.0.0</a>
