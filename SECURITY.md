@@ -10,12 +10,13 @@ Describe in the report:
 
 * the version of ezxmldsig, of Node.js, and of its OpenSSL (`node -p process.versions.openssl`);
 * what an attacker can do, and under which conditions (what they must be able to submit or observe);
-* the steps or the code that reproduce it, with a token if possible. Never send a private key you use outside a test.
+* the steps or the code that reproduce it, with a token or a sealed container if possible. Never send a private key you use outside a test.
 
-A vulnerability that the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig-php) shares (the tokens and their checks are the same) can be reported on either repository.
+A vulnerability that the PHP library [ezxmldsig](https://github.com/webcoder31/ezxmldsig-php) shares (the tokens, the seals and their checks are the same) can be reported on either repository.
 
 ## Supported versions
 
 | Version | Supported |
 |---|---|
-| 1.x | Yes: security fixes are published as 1.x versions. |
+| 2.x | Yes: security fixes are published as 2.x versions. |
+| 1.x | No: upgrade to 2.x (see the section "Upgrading from 1.x" of the README). |
