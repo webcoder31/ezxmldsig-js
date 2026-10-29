@@ -451,7 +451,7 @@ The versions of the two libraries that work together. A pair has the same featur
 | 1.2.0 | 1.0.0, 1.0.1 | exchanged both ways, but for three defects of the PHP library 1.2.0, fixed in 1.2.1 (3) | in neither library | no: `getPrettyXML()` comes to the Node.js library in 1.0.3 |
 
 1. The tests of the Node.js library 2.0.0 exchange tokens with the PHP library 2.0.0; the PHP library 2.1.0 does not change the tokens.
-2. The tests of the PHP library 2.1.0 verify seals made by the Node.js library 2.0.0. The seals of the PHP library 2.1.0 were verified by the Node.js library 2.0.0 and validated by DSS by hand (see [What is checked, and by whom](#what-is-checked-and-by-whom)).
+2. The tests of the PHP library verify seals made by the Node.js library 2.0.0, and have the seals of the PHP library 2.1.0 verified by the Node.js library 2.0.0 and validated by DSS (see [What is checked, and by whom](#what-is-checked-and-by-whom)).
 3. Listed in [Differences with the PHP library](#differences-with-the-php-library).
 
 Each pair of the table is the one the tests of these versions check. The tokens do not change from the PHP library 1.2.1 and the Node.js library 1.0.2 on: later versions exchange them too, although the tests do not check every pair. A receiver of the PHP library 1.0 or 1.1 refuses the encrypted tokens of the PHP library 1.2.0 and later, and those of every version of the Node.js library.
@@ -532,8 +532,8 @@ Each check belongs in the tests of the library itself, and runs in its continuou
 | Check | Tokens of the PHP library | Tokens of the Node.js library | Seals of the PHP library | Seals of the Node.js library |
 |---|---|---|---|---|
 | 1. It verifies what it creates | tests and continuous integration of the PHP library | tests and continuous integration of the Node.js library | tests and continuous integration of the PHP library | tests and continuous integration of the Node.js library |
-| 2. The other library verifies what it creates | tests and continuous integration of the Node.js library, against the PHP library 2.0.0 | tests and continuous integration of the Node.js library, by the PHP library 2.0.0 | by hand | tests and continuous integration of the PHP library, on seals made by the Node.js library 2.0.0 |
-| 3. Third-party tools verify what it creates | by hand | tests and continuous integration of the Node.js library | tests and continuous integration of the PHP library, by DSS, at level B; by hand at levels T and LT | tests and continuous integration of the Node.js library |
+| 2. The other library verifies what it creates | tests and continuous integration of the Node.js library, against the PHP library 2.0.0 | tests and continuous integration of the Node.js library, by the PHP library 2.0.0 | tests and continuous integration of the PHP library, by the Node.js library 2.0.0 | tests and continuous integration of the PHP library, on seals made by the Node.js library 2.0.0 |
+| 3. Third-party tools verify what it creates | by hand | tests and continuous integration of the Node.js library | tests and continuous integration of the PHP library, by DSS | tests and continuous integration of the Node.js library |
 | 4. It verifies what these tools create | by hand | tests and continuous integration of the Node.js library | tests and continuous integration of the PHP library, on a seal made by DSS | tests and continuous integration of the Node.js library, on a seal made by DSS |
 
 The tests of the PHP library run with `bin/test`, on a developer machine and in its continuous integration. The Node.js library depends on xml-crypto, which canonicalizes its XML: for its tokens, xml-crypto is not a checker wholly apart from the code under test.
