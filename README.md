@@ -533,7 +533,7 @@ Each check belongs in the tests of the library itself, and runs in its continuou
 |---|---|---|---|---|
 | 1. It verifies what it creates | tests and continuous integration of the PHP library | tests and continuous integration of the Node.js library | tests and continuous integration of the PHP library | tests and continuous integration of the Node.js library |
 | 2. The other library verifies what it creates | tests and continuous integration of the Node.js library, against the PHP library 2.0.0 | tests and continuous integration of the Node.js library, by the PHP library 2.0.0 | by hand | tests and continuous integration of the PHP library, on seals made by the Node.js library 2.0.0 |
-| 3. Third-party tools verify what it creates | by hand | tests and continuous integration of the Node.js library | by hand | tests and continuous integration of the Node.js library |
+| 3. Third-party tools verify what it creates | by hand | tests and continuous integration of the Node.js library | tests and continuous integration of the PHP library, by DSS, at level B; by hand at levels T and LT | tests and continuous integration of the Node.js library |
 | 4. It verifies what these tools create | by hand | tests and continuous integration of the Node.js library | tests and continuous integration of the PHP library, on a seal made by DSS | tests and continuous integration of the Node.js library, on a seal made by DSS |
 
 The tests of the PHP library run with `bin/test`, on a developer machine and in its continuous integration. The Node.js library depends on xml-crypto, which canonicalizes its XML: for its tokens, xml-crypto is not a checker wholly apart from the code under test.
