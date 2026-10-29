@@ -18,10 +18,11 @@
 # DSS, the validator of the seal tests (see bin/dss), runs on a Docker
 # network of its own, and the tests reach it at the URL bin/dss gives, in
 # DSS_URL; the network and DSS are removed at the end, even after an
-# interruption. DSS takes some 40 seconds to start: DSS=0 leaves it out, and
-# its tests are then skipped, with the reason. Without Docker, DSS is not
-# started either. In continuous integration (CI=true), when the tests fail,
-# the end of the logs of DSS is written to stderr.
+# interruption, which stops the command in progress at once. DSS takes
+# some 40 seconds to start: DSS=0 leaves it out, and its tests are then
+# skipped, with the reason. Without Docker, DSS is not started either. In
+# continuous integration (CI=true), when the tests fail, the end of the
+# logs of DSS is written to stderr.
 
 set -eu
 
@@ -29,8 +30,20 @@ ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
 case "${1:-}" in
-    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 esac
+
+# A long command runs in the background, and the script waits for it: a
+# signal interrupts the wait at once, and the trap stops the command, where
+# the shell would otherwise run the trap only once the command is over.
+CHILD=
+run() {
+    "$@" &
+    CHILD=$!
+    wait "$CHILD" || { status=$?; CHILD=; return "$status"; }
+    CHILD=
+}
+trap 'if [ -n "$CHILD" ]; then kill "$CHILD" 2>/dev/null || true; fi; exit 1' INT TERM
 
 npm run --silent build
 npm run --silent typecheck
@@ -44,9 +57,11 @@ elif ! docker info >/dev/null 2>&1; then
 else
     NETWORK="ezxmldsig-js-test-$$"
     docker network create "$NETWORK" >/dev/null
-    trap '"$ROOT_DIR/bin/dss" stop "$NETWORK"; docker network rm "$NETWORK" >/dev/null' EXIT
-    trap 'exit 1' INT TERM
-    DSS_URL=$("$ROOT_DIR/bin/dss" start "$NETWORK")
+    URL_FILE="test/.cache/dss-url-$$"
+    trap '"$ROOT_DIR/bin/dss" stop "$NETWORK"; docker network rm "$NETWORK" >/dev/null; rm -f "$URL_FILE"' EXIT
+    mkdir -p test/.cache
+    run "$ROOT_DIR/bin/dss" start "$NETWORK" > "$URL_FILE"
+    DSS_URL=$(cat "$URL_FILE")
     export DSS_URL
 fi
 
@@ -54,7 +69,7 @@ if [ $# -eq 0 ]; then
     set -- 'test/**/*.test.ts'
 fi
 STATUS=0
-node --test "$@" || STATUS=$?
+run node --test "$@" || STATUS=$?
 if [ "$STATUS" != 0 ] && [ "${CI:-}" = true ] && [ -n "${NETWORK:-}" ]; then
     echo "The end of the logs of DSS:" >&2
     docker logs "$NETWORK-dss" 2>&1 | tail -200 >&2 || true
