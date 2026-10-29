@@ -391,7 +391,7 @@
 </table>
 <ol>
 <li>The tests of the Node.js library 2.0.0 exchange tokens with the PHP library 2.0.0; the PHP library 2.1.0 does not change the tokens.</li>
-<li>The tests of the PHP library 2.1.0 verify seals made by the Node.js library 2.0.0. The seals of the PHP library 2.1.0 were verified by the Node.js library 2.0.0 and validated by DSS by hand (see <a href="#what-is-checked-and-by-whom">What is checked, and by whom</a>).</li>
+<li>The tests of the PHP library verify seals made by the Node.js library 2.0.0, and have the seals of the PHP library 2.1.0 verified by the Node.js library 2.0.0 and validated by DSS (see <a href="#what-is-checked-and-by-whom">What is checked, and by whom</a>).</li>
 <li>Listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</li>
 </ol>
 <p>Each pair of the table is the one the tests of these versions check. The tokens do not change from the PHP library 1.2.1 and the Node.js library 1.0.2 on: later versions exchange them too, although the tests do not check every pair. A receiver of the PHP library 1.0 or 1.1 refuses the encrypted tokens of the PHP library 1.2.0 and later, and those of every version of the Node.js library.</p>
@@ -468,14 +468,14 @@
 <td>2. The other library verifies what it creates</td>
 <td>tests and continuous integration of the Node.js library, against the PHP library 2.0.0</td>
 <td>tests and continuous integration of the Node.js library, by the PHP library 2.0.0</td>
-<td>by hand</td>
+<td>tests and continuous integration of the PHP library, by the Node.js library 2.0.0</td>
 <td>tests and continuous integration of the PHP library, on seals made by the Node.js library 2.0.0</td>
 </tr>
 <tr>
 <td>3. Third-party tools verify what it creates</td>
 <td>by hand</td>
 <td>tests and continuous integration of the Node.js library</td>
-<td>tests and continuous integration of the PHP library, by DSS, at level B; by hand at levels T and LT</td>
+<td>tests and continuous integration of the PHP library, by DSS</td>
 <td>tests and continuous integration of the Node.js library</td>
 </tr>
 <tr>
