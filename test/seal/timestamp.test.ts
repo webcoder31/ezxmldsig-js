@@ -2,7 +2,8 @@
  * Level T: the time-stamp request of a seal, the addition of the token of a
  * response, and the verification of a time-stamped seal. The tokens come
  * from the test authority of test/helpers/tsa.ts or from OpenSSL, not from
- * the code under test; DSS validates the time-stamped seals.
+ * the code under test; DSS validates a seal time-stamped by OpenSSL (the
+ * sample seals: test/seal/dss.test.ts).
  */
 
 import assert from 'node:assert/strict';
@@ -158,19 +159,6 @@ describe('attacks on a time-stamped seal', () => {
 
 describe('validation by DSS', { skip: dssSkip }, () => {
   before(publishTestCrls);
-  for (const key of ['rsa3072', 'p256']) {
-    test(`${key}, level T`, async () => {
-      const report = await validateWithDss(timestamped(seal(key)));
-      const signature = report.signatures[0];
-      assert.equal(signature?.format, 'XAdES-BASELINE-T');
-      assert.equal(signature?.signatureIntact, true);
-      assert.ok(signature?.references.every((r) => r.found && r.intact));
-      assert.ok(signature?.trusted.includes('CN=Lothbrok Seal Test,OU=TSA Root CA,O=Lothbrok Ltd,C=DK'));
-      assert.equal(signature?.indication, 'TOTAL_PASSED');
-      assert.deepEqual(signature?.errors, []);
-    });
-  }
-
   test('with a token of OpenSSL', { skip: opensslSkip }, async () => {
     const original = seal('rsa3072');
     const report = await validateWithDss(addSignatureTimestamp(original, opensslTimestamp(timestampRequest(original)), { tsaCertPath: TSA_ROOT }));

@@ -44,7 +44,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "npm run build && npm run typecheck && node --test 'test/**/*.test.ts'",
+    "test": "bin/test",
     "typecheck": "tsc -p tsconfig.json",
     "docs": "typedoc --treatWarningsAsErrors",
     "prepublishOnly": "npm run build"

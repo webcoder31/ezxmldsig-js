@@ -4,26 +4,32 @@
 # Commission) for the seal tests, in Docker, with its configuration.
 #
 # Usage:
-#   bin/dss start     builds the image if needed, then (re)starts DSS
-#   bin/dss stop      stops and removes the containers and the network
-#   bin/dss status    tells whether DSS answers
-#   bin/dss build     builds the image dss-demo:6.5.1 (long: a Maven build)
+#   bin/dss start NETWORK   builds the image if needed, then starts DSS on a
+#                           Docker network, and writes its URL on stdout
+#   bin/dss stop NETWORK    stops and removes its containers
+#   bin/dss build           builds the image dss-demo:6.5.1 (long: a Maven build)
+#
+# bin/test runs it, on a network of its own, unless DSS=0: DSS answers on a
+# port of 127.0.0.1 that Docker picks, so that runs do not collide, at the
+# URL bin/test gives the tests in DSS_URL (see test/helpers/dss.ts). DSS
+# lives as long as one run of the tests.
 #
 # The image is built from the Dockerfile of esig/dss-demonstrations, at the
-# tag 6.5.1 (commit 3c79488), cloned into test/.cache/dss/src. DSS answers at
-# http://127.0.0.1:8090, where test/helpers/dss.ts sends the seals (DSS_URL).
+# tag 6.5.1 (commit 3c79488), cloned into test/.cache/dss/src. The PHP
+# library ezxmldsig keeps a copy of this script, whose tests check that it
+# keeps this image and this configuration.
 #
 # Its configuration is written to test/.cache/dss/ and mounted in the lib/
 # directory of Tomcat, which is on the class path of DSS:
 # dss-custom.properties names a keystore of trust anchors, which holds the
 # roots of test/fixtures/seal/certs/ (root, and tsa-root). Each start
-# writes it again: after bin/gen-seal-test-certs, run bin/dss start. The
-# CRLs and OCSP responses DSS fetches are kept one second in its cache, not
-# until their next update: a test that publishes another CRL is then seen.
+# writes it again. The CRLs and OCSP responses DSS fetches are kept one
+# second in its cache, not until their next update: a test that publishes
+# another CRL is then seen.
 #
 # A second container serves test/.cache/dss/pki/ over HTTP at the name
-# pki.ezxmlseal.test, on the Docker network of DSS: the CRL distribution
-# points and OCSP responder the test certificates name.
+# pki.ezxmlseal.test, on the same network: the CRL distribution points and
+# OCSP responder the test certificates name.
 
 set -eu
 
@@ -35,17 +41,12 @@ IMAGE=dss-demo:6.5.1
 REPOSITORY=https://github.com/esig/dss-demonstrations.git
 TAG=6.5.1
 COMMIT=3c79488
-NETWORK=ezxmlseal-test
-DSS=ezxmlseal-dss
-PKI=ezxmlseal-pki
 PKI_HOST=pki.ezxmlseal.test
 PKI_IMAGE=busybox:1.37
-PORT=127.0.0.1:8090
-URL=http://127.0.0.1:8090
 KEYSTORE_PASSWORD=test-password
 
 usage() {
-    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 docker_ready() {
@@ -91,8 +92,7 @@ EOF
 }
 
 stop() {
-    docker rm -f "$DSS" "$PKI" >/dev/null 2>&1 || true
-    docker network rm "$NETWORK" >/dev/null 2>&1 || true
+    docker rm -f "$1-dss" "$1-pki" >/dev/null 2>&1 || true
 }
 
 start() {
@@ -100,41 +100,37 @@ start() {
         build
     fi
     configure
-    stop
-    docker network create "$NETWORK" >/dev/null
-    docker run -d --name "$PKI" --network "$NETWORK" --network-alias "$PKI_HOST" \
+    stop "$1"
+    docker run -d --rm --name "$1-pki" --network "$1" --network-alias "$PKI_HOST" \
         -v "$CACHE/pki:/srv:ro" "$PKI_IMAGE" httpd -f -p 80 -h /srv >/dev/null
-    docker run -d --name "$DSS" --network "$NETWORK" -p "$PORT:8080" \
+    docker run -d --rm --name "$1-dss" --network "$1" --network-alias dss -p 127.0.0.1::8080 \
         -v "$CACHE/config/dss-custom.properties:/usr/local/tomcat/lib/dss-custom.properties:ro" \
         -v "$CACHE/config/test-trust.p12:/usr/local/tomcat/lib/test-trust.p12:ro" \
         "$IMAGE" >/dev/null
-    echo "Waiting for DSS at $URL." >&2
+    # Asked from the PKI container: the host does not reach the network.
+    echo "Waiting for DSS." >&2
     tries=0
-    until status >/dev/null 2>&1; do
+    until docker exec "$1-pki" wget -q -O /dev/null http://dss:8080/ 2>/dev/null; do
         tries=$((tries + 1))
-        if [ "$tries" -gt 100 ]; then
-            echo "DSS does not answer after 5 minutes: docker logs $DSS" >&2
+        if ! docker inspect "$1-dss" >/dev/null 2>&1 || [ "$tries" -gt 100 ]; then
+            echo "DSS does not answer after $((tries * 3)) s:" >&2
+            docker logs "$1-dss" 2>&1 | tail -20 >&2 || true
+            stop "$1"
             exit 1
         fi
         sleep 3
     done
-    echo "DSS answers at $URL; $PKI_HOST serves test/.cache/dss/pki/." >&2
-}
-
-status() {
-    code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/" || true)
-    if [ "$code" = 200 ]; then
-        echo "DSS answers at $URL."
-    else
-        echo "DSS does not answer at $URL."
-        return 1
-    fi
+    url="http://$(docker port "$1-dss" 8080/tcp | head -1)"
+    echo "DSS answers at $url; $PKI_HOST serves test/.cache/dss/pki/." >&2
+    echo "$url"
 }
 
 case "${1:-}" in
-    start) docker_ready; start ;;
-    stop) docker_ready; stop ;;
-    status) status ;;
+    start|stop) [ $# -eq 2 ] || { usage >&2; exit 1; } ;;
+esac
+case "${1:-}" in
+    start) docker_ready; start "$2" ;;
+    stop) docker_ready; stop "$2" ;;
     build) docker_ready; build ;;
     -h|--help) usage ;;
     *) usage >&2; exit 1 ;;

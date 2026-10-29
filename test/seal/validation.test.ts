@@ -2,7 +2,8 @@
  * Level LT: the list of the CRLs a seal needs, their addition to a seal of
  * level T, and the verification of a seal by the data it embeds. The CRLs
  * come from test/helpers/crl.ts, the tokens from test/helpers/tsa.ts, not
- * from the code under test; DSS validates the seals of level LT.
+ * from the code under test; DSS validates the seals of the offline PKI (the
+ * sample seals: test/seal/dss.test.ts).
  */
 
 import assert from 'node:assert/strict';
@@ -232,17 +233,6 @@ describe('a seal whose CRLs nobody serves', () => {
 
 describe('validation by DSS', { skip: dssSkip }, () => {
   before(publishTestCrls);
-
-  for (const key of ['rsa3072', 'p256']) {
-    test(`${key}, level LT: XAdES-BASELINE-LT, TOTAL_PASSED, the CRLs of the seal read`, async () => {
-      const report = await validateWithDss(extended(timestamped(key)));
-      const signature = report.signatures[0];
-      assert.equal(report.revocationOrigins.filter((origin) => origin === 'INPUT_DOCUMENT').length, 3);
-      assert.equal(signature?.format, 'XAdES-BASELINE-LT');
-      assert.equal(signature?.indication, 'TOTAL_PASSED');
-      assert.deepEqual(signature?.errors, []);
-    });
-  }
 
   // DSS cannot reach offline.ezxmlseal.test: what it knows of the status of
   // the certificates comes from the seal, or nowhere.

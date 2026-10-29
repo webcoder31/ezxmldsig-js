@@ -42,5 +42,8 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
+      # The seal tests with DSS ran in the job dss.
       - run: npm test
+        env:
+          DSS: '0'
       - run: npm publish --access public

@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+# Runs the test suite: builds dist/, checks the types, starts DSS, runs the
+# tests with the test runner of Node.js, and stops DSS. npm test runs it.
+#
+# Usage:
+#   bin/test [NODE_TEST_ARGS...]
+#
+# Examples:
+#   bin/test                                   the whole suite
+#   bin/test test/seal/dss.test.ts             one file
+#   bin/test --test-name-pattern=DSS 'test/**/*.test.ts'
+#                                              the tests that need DSS
+#   DSS=0 bin/test                             without DSS
+#
+# The arguments go to node --test (default: 'test/**/*.test.ts').
+#
+# DSS, the validator of the seal tests (see bin/dss), runs on a Docker
+# network of its own, and the tests reach it at the URL bin/dss gives, in
+# DSS_URL; the network and DSS are removed at the end, even after an
+# interruption. DSS takes some 40 seconds to start: DSS=0 leaves it out, and
+# its tests are then skipped, with the reason. Without Docker, DSS is not
+# started either. In continuous integration (CI=true), when the tests fail,
+# the end of the logs of DSS is written to stderr.
+
+set -eu
+
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+cd "$ROOT_DIR"
+
+case "${1:-}" in
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+npm run --silent build
+npm run --silent typecheck
+
+# DSS on a network of its own (see bin/dss), unless DSS=0.
+if [ "${DSS:-1}" = 0 ]; then
+    unset DSS_URL
+elif ! docker info >/dev/null 2>&1; then
+    echo "Docker is not reachable: DSS is not started, and its tests are skipped." >&2
+    unset DSS_URL
+else
+    NETWORK="ezxmldsig-js-test-$$"
+    docker network create "$NETWORK" >/dev/null
+    trap '"$ROOT_DIR/bin/dss" stop "$NETWORK"; docker network rm "$NETWORK" >/dev/null' EXIT
+    trap 'exit 1' INT TERM
+    DSS_URL=$("$ROOT_DIR/bin/dss" start "$NETWORK")
+    export DSS_URL
+fi
+
+if [ $# -eq 0 ]; then
+    set -- 'test/**/*.test.ts'
+fi
+STATUS=0
+node --test "$@" || STATUS=$?
+if [ "$STATUS" != 0 ] && [ "${CI:-}" = true ] && [ -n "${NETWORK:-}" ]; then
+    echo "The end of the logs of DSS:" >&2
+    docker logs "$NETWORK-dss" 2>&1 | tail -200 >&2 || true
+fi
+exit $STATUS

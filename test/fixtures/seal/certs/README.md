@@ -26,4 +26,4 @@ The keys of the signers are encrypted with the password `signKeyPassword`; the k
 
 The seal certificates but `offline` have the key usage `digitalSignature, nonRepudiation`, a CRL at `/intermediate.crl`, an OCSP responder at `/ocsp`, and their issuer at `/intermediate.cer`.
 
-To validate the seals of the tests, DSS must trust `root.cert.pem` and `tsa-root.cert.pem`: `bin/dss start` installs them, and must run again after `bin/gen-seal-test-certs`.
+To validate the seals of the tests, DSS must trust `root.cert.pem` and `tsa-root.cert.pem`: `bin/dss start` installs them, at each run of the tests.

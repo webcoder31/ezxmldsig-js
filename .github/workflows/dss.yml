@@ -1,12 +1,14 @@
 # The seal tests that send the seals to DSS (Digital Signature Service, the
-# validator of the European Commission), which bin/dss runs in Docker.
+# validator of the European Commission): bin/test starts DSS with bin/dss,
+# in Docker, and runs the tests whose name holds DSS.
 # Called by ci.yml on each push and pull request, and by publish.yml before
 # it publishes. The image of DSS, built by Maven from
 # esig/dss-demonstrations, is kept in the cache of GitHub Actions (docker
 # save), under a key that changes with bin/dss: it is built again when
 # bin/dss changes, or when the cache has gone unused for 7 days and GitHub
-# removed it. With DSS_URL set, a DSS test fails instead of being skipped
-# when DSS does not answer; the job fails if any test was skipped.
+# removed it. With DSS_URL set by bin/test, a DSS test fails instead of
+# being skipped when DSS does not answer; the job fails if any test was
+# skipped, or if none ran.
 name: DSS
 
 on:
@@ -19,7 +21,6 @@ jobs:
   dss:
     runs-on: ubuntu-24.04
     env:
-      DSS_URL: http://127.0.0.1:8090
       IMAGE_TAR: test/.cache/dss-image.tar
     steps:
       - uses: actions/checkout@v4
@@ -46,11 +47,10 @@ jobs:
         with:
           path: ${{ env.IMAGE_TAR }}
           key: dss-image-${{ hashFiles('bin/dss') }}
-      - run: bin/dss start
-      - run: npm run build
       - name: The seal tests with DSS, none skipped
         run: |
-          node --test --test-reporter=spec test/seal/ocsp.test.ts test/seal/revocation.test.ts test/seal/seal.test.ts test/seal/timestamp.test.ts test/seal/validation.test.ts | tee test/.cache/dss-tests.txt
+          # sh: shellcheck takes bin/test for the command test.
+          sh bin/test --test-reporter=spec --test-name-pattern=DSS 'test/**/*.test.ts' | tee test/.cache/dss-tests.txt
           # A skipped test is counted by the line ℹ skipped, a skipped suite
           # (describe) is not: the spec reporter writes it on a line of its own,
           # that starts with ﹣.
@@ -58,6 +58,7 @@ jobs:
             echo 'Some tests or suites were skipped.' >&2
             exit 1
           fi
-      - name: The logs of DSS
-        if: failure()
-        run: docker logs ezxmlseal-dss 2>&1 | tail -200
+          if grep -q '^ℹ tests 0$' test/.cache/dss-tests.txt; then
+            echo 'No test ran.' >&2
+            exit 1
+          fi

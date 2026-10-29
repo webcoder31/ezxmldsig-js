@@ -2,16 +2,17 @@
  * Validation of seals by DSS (Digital Signature Service, the validator of
  * the European Commission), which does not go through the code under test.
  *
- * DSS runs apart, at DSS_URL (default http://127.0.0.1:8090), started by
- * bin/dss start: built from the Dockerfile of esig/dss-demonstrations, it
- * trusts test/fixtures/seal/certs/root.cert.pem and tsa-root.cert.pem, and
- * reaches the CRL and OCSP of the test PKI at pki.ezxmlseal.test.
+ * DSS runs at DSS_URL, which bin/test (npm test) sets when it starts DSS
+ * with bin/dss, unless DSS=0: built from the Dockerfile of
+ * esig/dss-demonstrations, it trusts test/fixtures/seal/certs/root.cert.pem
+ * and tsa-root.cert.pem, and reaches the CRL and OCSP of the test PKI at
+ * pki.ezxmlseal.test.
  *
- * The tests that need it are skipped, with the reason, when DSS does not
- * answer. In continuous integration (CI=true), they are skipped unless
- * DSS_URL is set, and then fail if DSS does not answer: the workflow
- * .github/workflows/dss.yml starts DSS and sets DSS_URL, on each push and
- * before each publication on npm.
+ * The tests that need it are skipped, with the reason, when DSS_URL is not
+ * set (DSS=0, or the tests run without bin/test), or when DSS does not
+ * answer there. In continuous integration (CI=true), with DSS_URL set, they
+ * fail instead if DSS does not answer: the workflow
+ * .github/workflows/dss.yml runs them, and fails if any is skipped.
  */
 
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
@@ -19,12 +20,17 @@ import { fileURLToPath } from 'node:url';
 
 import { makeCrl } from './crl.ts';
 
-export const DSS_URL = process.env['DSS_URL'] ?? 'http://127.0.0.1:8090';
+export const DSS_URL = process.env['DSS_URL'] ?? '';
 
 /** Why the DSS tests are skipped, or false when they run. */
 export const dssSkip: string | false = await (async () => {
+  if (DSS_URL === '') {
+    return process.env['DSS'] === '0'
+      ? 'DSS=0: DSS is not started.'
+      : 'DSS_URL is not set: run the tests with npm test (bin/test), which starts DSS.';
+  }
   if (process.env['CI'] === 'true') {
-    return process.env['DSS_URL'] === undefined ? 'DSS is not started in continuous integration (set DSS_URL to run these tests).' : false;
+    return false;
   }
   try {
     const response = await fetch(DSS_URL, { signal: AbortSignal.timeout(3000) });

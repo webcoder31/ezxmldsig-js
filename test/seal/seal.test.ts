@@ -1,14 +1,14 @@
 /**
  * The creation of seals at level B: the layout of the container, the
  * structure of the XAdES signature (EN 319 132-1, level B-B), the choice of
- * the algorithms, the refusal of misuses, and the validation of the seals by
- * DSS, which does not go through the code under test.
+ * the algorithms, and the refusal of misuses. DSS validates the sample seals
+ * (test/seal/dss.test.ts).
  */
 
 import assert from 'node:assert/strict';
 import { X509Certificate, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { before, describe, test } from 'node:test';
+import { describe, test } from 'node:test';
 
 import { DOMParser, type Document, type Element } from '@xmldom/xmldom';
 import xpath from 'xpath';
@@ -16,7 +16,6 @@ import xpath from 'xpath';
 import * as alg from '../../dist/seal/algorithms.js';
 import { createSeal, type SealFile, type SealOptions } from '../../dist/seal/seal.js';
 import { readZip } from '../../dist/seal/zip.js';
-import { dssSkip, publishTestCrls, validateWithDss } from '../helpers/dss.ts';
 
 const CERTS = 'test/fixtures/seal/certs';
 const PASSWORD = 'signKeyPassword';
@@ -189,34 +188,6 @@ describe('misuses are refused', () => {
   for (const [name, run, message] of cases) {
     test(name, () => {
       assert.throws(run, { message });
-    });
-  }
-});
-
-describe('validation by DSS', { skip: dssSkip }, () => {
-  before(publishTestCrls);
-  const expected = ['contrat final.pdf', "notes d'été.md", 'docs/a#b%c.txt', 'data.bin'];
-  const seals: [string, () => Buffer][] = [
-    ['RSA 3072, RSA-PSS', () => seal('rsa3072', { signingTime: new Date() })],
-    ['RSA 2048, RSA-PSS', () => seal('rsa2048', { signingTime: new Date() })],
-    ['RSA 3072, PKCS#1 v1.5', () => seal('rsa3072', { signingTime: new Date(), signatureAlgorithm: alg.RSA_SHA256 })],
-    ['P-256, ECDSA', () => seal('p256', { signingTime: new Date() })],
-    ['P-384, ECDSA, SHA-512 digests', () => seal('p384', { signingTime: new Date(), digestAlgorithm: alg.SHA512 })],
-  ];
-  for (const [name, make] of seals) {
-    test(name, async () => {
-      const report = await validateWithDss(make());
-      assert.equal(report.containerType, 'ASiC-E');
-      assert.equal(report.signatures.length, 1);
-      const signature = report.signatures[0];
-      assert.equal(signature?.format, 'XAdES-BASELINE-B');
-      assert.deepEqual(signature?.scope, expected);
-      assert.equal(signature?.signatureIntact, true);
-      assert.equal(signature?.references.length, expected.length + 1);
-      assert.ok(signature?.references.every((r) => r.found && r.intact));
-      assert.deepEqual(signature?.trusted, ['CN=Lothbrok Seal Test,OU=Seal Root CA,O=Lothbrok Ltd,C=DK']);
-      assert.equal(signature?.indication, 'TOTAL_PASSED');
-      assert.deepEqual(signature?.errors, []);
     });
   }
 });
