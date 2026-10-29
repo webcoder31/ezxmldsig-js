@@ -49,6 +49,13 @@
  * - "constants": the constants of XMLDSigToken (no field). Result: an
  *   object of their names and values.
  *
+ * - "verifySeal": verifies the sealed container "container" ({"bytes":
+ *   base64}) with Seal::verifySeal(). Fields: "container", "options" (its
+ *   CRLs and OCSP responses as {"bytes": base64}). Result: the verdict, in
+ *   the form of the verdicts of test/fixtures/seal/ of the PHP library
+ *   ("valid", "error", "level", "files", "signingTime", "timestampTime",
+ *   "signer"), and "revocationChecked".
+ *
  * "now" is the time (UNIX time, in seconds) at which isOutOfDate() was
  * evaluated, so that a comparison can evaluate it at the same time.
  * Token data that are not UTF-8 text are given as {"bytes": base64}. The
@@ -72,6 +79,7 @@ use webcoder31\ezxmldsig\Demo\Certs;
 use webcoder31\ezxmldsig\Demo\Forge;
 use webcoder31\ezxmldsig\Demo\Receiver;
 use webcoder31\ezxmldsig\core\X509Cert;
+use webcoder31\ezxmldsig\seal\Seal;
 use webcoder31\ezxmldsig\token\XMLDSigToken;
 
 /**
@@ -104,6 +112,36 @@ function verdict(array $verdict)
         'anomalies'      => $verdict['anomalies'],
         'steps'          => $steps,
         'data'           => jsonData($verdict['data']),
+    ];
+}
+
+/**
+ * Gives {"bytes": base64} values as bytes, in lists and objects.
+ */
+function bytesOf($value)
+{
+    if (is_array($value) && 1 === count($value) && isset($value['bytes']) && is_string($value['bytes']))
+    {
+        return base64_decode($value['bytes'], true);
+    }
+    return is_array($value) ? array_map('bytesOf', $value) : $value;
+}
+
+/**
+ * Returns the verdict of Seal::verifySeal() on a seal.
+ */
+function sealVerdict($result)
+{
+    $iso = function ($date) { return null === $date ? null : $date->format('Y-m-d\TH:i:s.v\Z'); };
+    return [
+        'valid'             => $result->isValid(),
+        'error'             => $result->getError(),
+        'level'             => $result->getLevel(),
+        'files'             => $result->getFiles(),
+        'signingTime'       => $iso($result->getSigningTime()),
+        'timestampTime'     => $iso($result->getTimestampTime()),
+        'signer'            => null === $result->getSigningCertificate() ? null : $result->getSigningCertificate()->getDN(),
+        'revocationChecked' => $result->isRevocationChecked(),
     ];
 }
 
@@ -264,6 +302,9 @@ function run(array $request)
 
         case 'constants':
             return (new ReflectionClass(XMLDSigToken::class))->getConstants();
+
+        case 'verifySeal':
+            return sealVerdict(Seal::verifySeal(bytesOf($request['container']), bytesOf($options)));
 
         default:
             throw new Exception("Unknown command!");

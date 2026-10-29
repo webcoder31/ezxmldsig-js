@@ -12,8 +12,8 @@
 # their format). Paths of keys and certificates in the requests are relative
 # to the root of this repository, which the container sees read-only.
 #
-# The PHP library is the tag v2.0.0 of https://github.com/webcoder31/ezxmldsig-php,
-# cloned once into test/.cache/ezxmldsig-php-v2.0.0/ (ignored by git), with its
+# The PHP library is the tag v2.1.0 of https://github.com/webcoder31/ezxmldsig-php,
+# cloned once into test/.cache/ezxmldsig-php-v2.1.0/ (ignored by git), with its
 # dependencies installed by Composer in the composer:2 image. The environment
 # variable EZXMLDSIG_PHP_DIR names another copy instead (a working copy, for
 # instance), whose vendor/ must be installed. PHP_VERSION picks the image
@@ -23,7 +23,7 @@ set -eu
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
-PHP_TAG=v2.0.0
+PHP_TAG=v2.1.0
 PHP_REPO=https://github.com/webcoder31/ezxmldsig-php.git
 PHP_VERSION=${PHP_VERSION:-8.3}
 

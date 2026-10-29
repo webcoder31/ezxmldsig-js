@@ -15,7 +15,7 @@ const ROOT_DIR = fileURLToPath(new URL('../..', import.meta.url));
 const SCRIPT = fileURLToPath(new URL('../../bin/php-ezxmldsig', import.meta.url));
 
 export type PhpRequest = Record<string, unknown> & {
-  command: 'create' | 'analyze' | 'cert' | 'forge' | 'attack' | 'attacks' | 'constants';
+  command: 'create' | 'analyze' | 'cert' | 'forge' | 'attack' | 'attacks' | 'constants' | 'verifySeal';
 };
 
 export type PhpResult = Record<string, unknown>;
