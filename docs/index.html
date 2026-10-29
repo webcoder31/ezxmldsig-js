@@ -390,7 +390,7 @@
 </tbody>
 </table>
 <ol>
-<li>The tests of the Node.js library 2.0.0 exchange tokens with the PHP library 2.0.0; the PHP library 2.1.0 does not change the tokens.</li>
+<li>The tests of the Node.js library 2.0.0 exchange tokens with the PHP library 2.0.0; the PHP library 2.1.0 does not change the tokens, and its tests have them analyzed by the Node.js library 2.0.0.</li>
 <li>The tests of the PHP library verify seals made by the Node.js library 2.0.0, and have the seals of the PHP library 2.1.0 verified by the Node.js library 2.0.0 and validated by DSS (see <a href="#what-is-checked-and-by-whom">What is checked, and by whom</a>).</li>
 <li>Listed in <a href="#differences-with-the-php-library">Differences with the PHP library</a>.</li>
 </ol>
@@ -466,21 +466,21 @@
 </tr>
 <tr>
 <td>2. The other library verifies what it creates</td>
-<td>tests and continuous integration of the Node.js library, against the PHP library 2.0.0</td>
+<td>tests and continuous integration of the PHP library, by the Node.js library 2.0.0</td>
 <td>tests and continuous integration of the Node.js library, by the PHP library 2.0.0</td>
 <td>tests and continuous integration of the PHP library, by the Node.js library 2.0.0</td>
 <td>tests and continuous integration of the PHP library, on seals made by the Node.js library 2.0.0</td>
 </tr>
 <tr>
 <td>3. Third-party tools verify what it creates</td>
-<td>by hand</td>
+<td>tests and continuous integration of the PHP library</td>
 <td>tests and continuous integration of the Node.js library</td>
 <td>tests and continuous integration of the PHP library, by DSS</td>
 <td>tests and continuous integration of the Node.js library</td>
 </tr>
 <tr>
 <td>4. It verifies what these tools create</td>
-<td>by hand</td>
+<td>tests and continuous integration of the PHP library</td>
 <td>tests and continuous integration of the Node.js library</td>
 <td>tests and continuous integration of the PHP library, on a seal made by DSS</td>
 <td>tests and continuous integration of the Node.js library, on a seal made by DSS</td>
